@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Chips - Patagonia Flooring</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+
+<div class="navbar">
+  <div class="navbar-brand">
+    <div class="logo">📡</div>
+    Control de Chips
+  </div>
+  <div class="nav-links">
+    <a data-section="dashboard" class="active">Dashboard</a>
+    <a data-section="empleados">Empleados</a>
+    <a data-section="chips">Chips SIM</a>
+    <a data-section="asignaciones">Asignaciones</a>
+    <a data-section="importar">Importar</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- DASHBOARD -->
+  <div id="section-dashboard" class="section active">
+    <div class="section-header">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="subtitle">Resumen general del sistema de control de chips</div>
+      </div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card info">
+        <div class="stat-icon">👤</div>
+        <div class="stat-label">Empleados</div>
+        <div class="stat-value" id="stat-empleados">0</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-icon">📱</div>
+        <div class="stat-label">Total Chips</div>
+        <div class="stat-value" id="stat-chips-total">0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-icon">✅</div>
+        <div class="stat-label">Disponibles</div>
+        <div class="stat-value" id="stat-disponibles">0</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-icon">📌</div>
+        <div class="stat-label">Asignados</div>
+        <div class="stat-value" id="stat-asignados">0</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-icon">🚫</div>
+        <div class="stat-label">Inactivos</div>
+        <div class="stat-value" id="stat-inactivos">0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-icon">📋</div>
+        <div class="stat-label">Asignaciones</div>
+        <div class="stat-value" id="stat-asignaciones">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMPLEADOS -->
+  <div id="section-empleados" class="section">
+    <div class="section-header">
+      <div>
+        <h1>Empleados</h1>
+        <div class="subtitle">Gestión de empleados y personal</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btn-nuevo-empleado">+ Nuevo Empleado</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div class="filters">
+          <input type="text" id="search-empleados" placeholder="Buscar por nombre...">
+          <select id="filter-sector">
+            <option value="">Todos los sectores</option>
+            <option value="SWAT">SWAT</option>
+            <option value="GENESIS">GÉNESIS</option>
+            <option value="FABRICA">FÁBRICA</option>
+            <option value="INSTALADORES">INSTALADORES</option>
+            <option value="COMERCIALES">COMERCIALES</option>
+            <option value="COORDINACION">COORDINACIÓN</option>
+            <option value="BONA">BONA</option>
+            <option value="REDES">REDES</option>
+            <option value="IMAGEN">IMAGEN</option>
+            <option value="ASISTENTES">ASISTENTES</option>
+            <option value="CONTADURIA">CONTADURÍA</option>
+            <option value="FOUNDERS">FOUNDERS</option>
+            <option value="SEGURIDAD">SEGURIDAD</option>
+          </select>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Email</th>
+                <th>Sector</th>
+                <th>Observaciones</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="empleados-tbody">
+              <tr><td colspan="6" class="loading">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHIPS -->
+  <div id="section-chips" class="section">
+    <div class="section-header">
+      <div>
+        <h1>Chips SIM</h1>
+        <div class="subtitle">Registro y control de tarjetas SIM</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btn-nuevo-chip">+ Nuevo Chip</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div class="filters">
+          <input type="text" id="search-chips" placeholder="Buscar por número SIM...">
+          <select id="filter-chip-estado">
+            <option value="">Todos los estados</option>
+            <option value="disponible">Disponible</option>
+            <option value="asignado">Asignado</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Número SIM</th>
+                <th>Operador</th>
+                <th>Estado</th>
+                <th>Registrado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="chips-tbody">
+              <tr><td colspan="5" class="loading">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASIGNACIONES -->
+  <div id="section-asignaciones" class="section">
+    <div class="section-header">
+      <div>
+        <h1>Asignaciones</h1>
+        <div class="subtitle">Asignar y gestionar chips SIM</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">📌 Asignar Chip</div>
+      <div class="card-body">
+        <p style="margin-bottom:16px;color:var(--text-muted);font-size:14px">
+          Chips disponibles: <strong id="asignar-disponibles">0</strong>
+        </p>
+        <div class="assign-form">
+          <div class="form-group">
+            <label>Empleado</label>
+            <select id="asig-empleado"><option value="">Cargando...</option></select>
+          </div>
+          <div class="form-group">
+            <label>Chip SIM</label>
+            <select id="asig-chip"><option value="">Cargando...</option></select>
+          </div>
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" id="asig-celular">
+              <label for="asig-celular">Incluye celular</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Modelo del celular</label>
+            <input type="text" id="asig-modelo" placeholder="Ej: Moto G54">
+          </div>
+          <div class="form-group full-width">
+            <label>Observaciones</label>
+            <textarea id="asig-observaciones" placeholder="Notas adicionales..."></textarea>
+          </div>
+          <div class="full-width">
+            <button class="btn btn-primary" id="btn-asignar">✓ Asignar Chip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📋 Historial de Asignaciones</div>
+      <div class="card-body">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Chip SIM</th>
+                <th>Asignación</th>
+                <th>Devolución</th>
+                <th>Celular</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="historial-tbody">
+              <tr><td colspan="6" class="loading">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORTAR -->
+  <div id="section-importar" class="section">
+    <div class="section-header">
+      <div>
+        <h1>Importar Datos</h1>
+        <div class="subtitle">Subir archivo Excel para importar empleados y chips</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div class="import-area" id="import-area">
+          <div class="import-icon">📂</div>
+          <p><strong>Hacé clic para seleccionar un archivo Excel</strong></p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:4px">Formatos: .xlsx, .xls</p>
+          <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+        </div>
+        <div id="import-preview" style="display:none;margin-top:16px"></div>
+        <button class="btn btn-success" id="btn-importar" style="display:none;margin-top:16px">📥 Importar a Supabase</button>
+        <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;font-size:13px;color:var(--text-muted)">
+          <strong>💡 Tips:</strong>
+          <ul style="margin:8px 0 0 16px">
+            <li>El archivo debe tener columnas como: Nombre, Teléfono, Email, Sector, etc.</li>
+            <li>Los empleados se importarán evitando duplicados por nombre</li>
+            <li>Después de importar, revisá la sección Empleados y luego cargá los chips manualmente</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL EMPLEADO -->
+<div class="modal-overlay" id="empleado-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-empleado-title">Nuevo Empleado</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="empleado-id">
+      <div class="form-group">
+        <label>Nombre completo *</label>
+        <input type="text" id="emp-nombre" placeholder="Nombre y apellido">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="text" id="emp-telefono" placeholder="Teléfono">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="emp-email" placeholder="correo@ejemplo.com">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input type="text" id="emp-contraseña" placeholder="Contraseña">
+        </div>
+        <div class="form-group">
+          <label>Sector</label>
+          <input type="text" id="emp-sector" placeholder="Ej: SWAT, GENESIS...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observaciones</label>
+        <textarea id="emp-observaciones" placeholder="Notas adicionales..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-empleado">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CHIP -->
+<div class="modal-overlay" id="chip-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-chip-title">Nuevo Chip</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="chip-id">
+      <div class="form-group">
+        <label>Número SIM *</label>
+        <input type="text" id="chip-numero" placeholder="Número de chip SIM">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Operador</label>
+          <input type="text" id="chip-operador" placeholder="Ej: Movistar, Claro...">
+        </div>
+        <div class="form-group">
+          <label>Estado</label>
+          <select id="chip-estado">
+            <option value="disponible">Disponible</option>
+            <option value="asignado">Asignado</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-chip">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

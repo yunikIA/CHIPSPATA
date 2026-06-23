@@ -1,0 +1,12 @@
+{
+  "name": "control-de-chips",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de control de chips SIM - Patagonia Flooring",
+  "scripts": {
+    "build": "node vercel-build.js"
+  },
+  "dependencies": {
+    "xlsx": "0.18.5"
+  }
+}

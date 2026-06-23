@@ -1,41 +1,38 @@
-let supabase;
+let db;
 
-function getSupabaseConfig() {
-  const saved = localStorage.getItem('supabase_config');
+function getFirebaseConfig() {
+  const saved = localStorage.getItem('firebase_config');
   if (saved) {
     try { return JSON.parse(saved); } catch (e) { return null; }
   }
   return null;
 }
 
-function saveSupabaseConfig(url, key) {
-  localStorage.setItem('supabase_config', JSON.stringify({ url, key }));
+function saveFirebaseConfig(config) {
+  localStorage.setItem('firebase_config', JSON.stringify(config));
 }
 
 function showSetupScreen() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg,#f1f5f9);font-family:system-ui,sans-serif">
-      <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:500px;width:90%">
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;font-family:system-ui,sans-serif">
+      <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:540px;width:90%">
         <div style="font-size:48px;margin-bottom:16px;text-align:center">🔧</div>
-        <h1 style="font-size:20px;margin-bottom:4px;text-align:center">Conectar con Supabase</h1>
-        <p style="color:#64748b;margin-bottom:24px;text-align:center;font-size:14px">Ingresá las credenciales de tu proyecto Supabase</p>
+        <h1 style="font-size:20px;margin-bottom:4px;text-align:center">Conectar con Firebase</h1>
+        <p style="color:#64748b;margin-bottom:24px;text-align:center;font-size:14px">Pegá la configuración de tu proyecto Firebase</p>
         <div style="text-align:left;background:#f8fafc;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:24px">
           <strong style="display:block;margin-bottom:4px">¿Dónde encuentro esto?</strong>
           <ol style="margin:0 0 0 16px;line-height:1.8">
-            <li>Creá un proyecto en <a href="https://supabase.com" target="_blank" style="color:#0a6e6e">supabase.com</a> (gratis)</li>
-            <li>Andá a <strong>Settings → API</strong></li>
-            <li>Copiá <strong>Project URL</strong> y <strong>anon public key</strong></li>
-            <li>Ejecutá <code>schema.sql</code> en el SQL Editor</li>
+            <li>Andá a <a href="https://console.firebase.google.com" target="_blank" style="color:#0a6e6e">console.firebase.google.com</a></li>
+            <li>Creá un proyecto o usá uno existente</li>
+            <li>Andá a <strong>Configuración del proyecto → General → Tus apps → Web</strong></li>
+            <li>Copiá el objeto de configuración (firebaseConfig)</li>
+            <li>Activá <strong>Firestore Database</strong> en modo prueba</li>
           </ol>
         </div>
         <div style="margin-bottom:16px">
-          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Supabase URL</label>
-          <input type="text" id="setup-url" placeholder="https://xyz.supabase.co" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">
-        </div>
-        <div style="margin-bottom:24px">
-          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Anon Public Key</label>
-          <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIs..." style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Configuración de Firebase (JSON)</label>
+          <textarea id="setup-config" rows="6" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:monospace;resize:vertical" placeholder='Pegá acá el objeto firebaseConfig, ej:&#10;{"apiKey":"AIzaSy...","authDomain":"...","projectId":"..."}'></textarea>
         </div>
         <button id="btn-setup" style="width:100%;padding:10px;background:#0a6e6e;color:white;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer">Conectar</button>
         <p id="setup-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none"></p>
@@ -43,17 +40,24 @@ function showSetupScreen() {
     </div>
   `;
   document.getElementById('btn-setup').addEventListener('click', async () => {
-    const url = document.getElementById('setup-url').value.trim();
-    const key = document.getElementById('setup-key').value.trim();
-    if (!url || !key) {
-      document.getElementById('setup-error').textContent = 'Completá ambos campos';
+    const val = document.getElementById('setup-config').value.trim();
+    if (!val) {
+      document.getElementById('setup-error').textContent = 'Pegá la configuración de Firebase';
       document.getElementById('setup-error').style.display = 'block';
       return;
     }
     try {
-      const testClient = supabaseJs.createClient(url, key, { auth: { persistSession: false } });
-      const { error } = await testClient.from('empleados').select('id', { count: 'exact', head: true });
-      saveSupabaseConfig(url, key);
+      const config = JSON.parse(val);
+      if (!config.apiKey || !config.projectId) {
+        document.getElementById('setup-error').textContent = 'El JSON debe contener al menos apiKey y projectId';
+        document.getElementById('setup-error').style.display = 'block';
+        return;
+      }
+      firebase.initializeApp(config);
+      const testDb = firebase.firestore();
+      await testDb.collection('_test').doc('_test').set({ test: true });
+      await testDb.collection('_test').doc('_test').delete();
+      saveFirebaseConfig(config);
       window.location.reload();
     } catch (e) {
       document.getElementById('setup-error').textContent = 'Error: ' + e.message;
@@ -62,16 +66,51 @@ function showSetupScreen() {
   });
 }
 
-function initSupabase() {
-  const config = getSupabaseConfig();
+function initFirebase() {
+  const config = getFirebaseConfig();
   if (!config) {
     showSetupScreen();
     return;
   }
-  supabase = supabaseJs.createClient(config.url, config.key, {
-    auth: { persistSession: false }
-  });
-  init();
+  try {
+    firebase.initializeApp(config);
+    db = firebase.firestore();
+    db.settings({ merge: true });
+    init();
+  } catch (e) {
+    showSetupScreen();
+  }
+}
+
+async function getEmpleados(opts = {}) {
+  let ref = db.collection('empleados');
+  if (opts.search) {
+    const s = opts.search;
+    ref = ref.where('nombre', '>=', s).where('nombre', '<=', s + '\uf8ff');
+  }
+  if (opts.sector) ref = ref.where('sector', '==', opts.sector);
+  if (opts.orderBy) ref = ref.orderBy(opts.orderBy, opts.orderDir || 'asc');
+  else ref = ref.orderBy('nombre');
+  const snapshot = await ref.get();
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function getChips(opts = {}) {
+  let ref = db.collection('chips');
+  if (opts.search) {
+    const s = opts.search;
+    ref = ref.where('numero_sim', '>=', s).where('numero_sim', '<=', s + '\uf8ff');
+  }
+  if (opts.estado) ref = ref.where('estado', '==', opts.estado);
+  if (opts.orderBy) ref = ref.orderBy(opts.orderBy, opts.orderDir || 'asc');
+  else ref = ref.orderBy('createdAt', 'desc');
+  const snapshot = await ref.get();
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function getAsignaciones() {
+  const snapshot = await db.collection('asignaciones').orderBy('createdAt', 'desc').limit(100).get();
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 let currentSection = 'dashboard';
@@ -135,18 +174,18 @@ function loadSection(section) {
 
 async function loadDashboard() {
   try {
-    const [empRes, chipsRes, asigRes] = await Promise.all([
-      supabase.from('empleados').select('*', { count: 'exact', head: true }),
-      supabase.from('chips').select('estado'),
-      supabase.from('asignaciones').select('*', { count: 'exact', head: true })
+    const [empSnap, chipSnap, asigSnap] = await Promise.all([
+      db.collection('empleados').get(),
+      db.collection('chips').get(),
+      db.collection('asignaciones').get()
     ]);
-    const totalEmpleados = empRes.count || 0;
-    const chips = chipsRes.data || [];
+    const totalEmpleados = empSnap.size;
+    const chips = chipSnap.docs.map(d => d.data());
     const totalChips = chips.length;
     const disponibles = chips.filter(c => c.estado === 'disponible').length;
     const asignados = chips.filter(c => c.estado === 'asignado').length;
     const inactivos = chips.filter(c => c.estado === 'inactivo').length;
-    const totalAsig = asigRes.count || 0;
+    const totalAsig = asigSnap.size;
 
     document.getElementById('stat-empleados').textContent = totalEmpleados;
     document.getElementById('stat-chips-total').textContent = totalChips;
@@ -168,21 +207,16 @@ async function loadEmpleados() {
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
-    let query = supabase.from('empleados').select('*');
-    if (search) query = query.ilike('nombre', `%${search}%`);
-    if (sector) query = query.eq('sector', sector);
-    query = query.order('nombre');
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) {
+    const data = await getEmpleados({ search: search || undefined, sector: sector || undefined, orderBy: 'nombre' });
+    if (data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(e => `
       <tr>
         <td><strong>${escapeHtml(e.nombre)}</strong></td>
-        <td>${escapeHtml(e.telefono)}</td>
-        <td>${escapeHtml(e.email)}</td>
+        <td>${escapeHtml(e.telefono || '')}</td>
+        <td>${escapeHtml(e.email || '')}</td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
         <td>${escapeHtml(e.observaciones || '')}</td>
         <td>
@@ -212,10 +246,11 @@ async function saveEmpleado() {
   if (!data.nombre) { showToast('El nombre es obligatorio', 'error'); return; }
   try {
     if (id) {
-      await supabase.from('empleados').update(data).eq('id', id);
+      await db.collection('empleados').doc(id).update(data);
       showToast('Empleado actualizado correctamente');
     } else {
-      await supabase.from('empleados').insert(data);
+      data.createdAt = new Date().toISOString();
+      await db.collection('empleados').add(data);
       showToast('Empleado creado correctamente');
     }
     closeModal(document.getElementById('empleado-modal'));
@@ -223,10 +258,12 @@ async function saveEmpleado() {
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
-function editEmpleado(id) {
-  supabase.from('empleados').select('*').eq('id', id).single().then(({ data, error }) => {
-    if (error || !data) { showToast('Error al cargar empleado', 'error'); return; }
-    document.getElementById('empleado-id').value = data.id;
+async function editEmpleado(id) {
+  try {
+    const doc = await db.collection('empleados').doc(id).get();
+    if (!doc.exists) { showToast('Error al cargar empleado', 'error'); return; }
+    const data = doc.data();
+    document.getElementById('empleado-id').value = doc.id;
     document.getElementById('emp-nombre').value = data.nombre || '';
     document.getElementById('emp-telefono').value = data.telefono || '';
     document.getElementById('emp-email').value = data.email || '';
@@ -235,7 +272,7 @@ function editEmpleado(id) {
     document.getElementById('emp-observaciones').value = data.observaciones || '';
     document.getElementById('modal-empleado-title').textContent = 'Editar Empleado';
     openModal('empleado-modal');
-  });
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
 function resetEmpleadoForm() {
@@ -252,7 +289,7 @@ function resetEmpleadoForm() {
 async function deleteEmpleado(id) {
   if (!confirm('¿Estás seguro de eliminar este empleado?')) return;
   try {
-    await supabase.from('empleados').delete().eq('id', id);
+    await db.collection('empleados').doc(id).delete();
     showToast('Empleado eliminado');
     loadEmpleados();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
@@ -266,13 +303,8 @@ async function loadChips() {
   try {
     const search = document.getElementById('search-chips').value.trim();
     const estado = document.getElementById('filter-chip-estado').value;
-    let query = supabase.from('chips').select('*');
-    if (search) query = query.ilike('numero_sim', `%${search}%`);
-    if (estado) query = query.eq('estado', estado);
-    query = query.order('created_at', { ascending: false });
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) {
+    const data = await getChips({ search: search || undefined, estado: estado || undefined, orderBy: 'createdAt', orderDir: 'desc' });
+    if (data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📱</div><p>No hay chips registrados</p></div></td></tr>';
       return;
     }
@@ -285,7 +317,7 @@ async function loadChips() {
             <span class="status-dot ${c.estado}"></span>${capitalize(c.estado)}
           </span>
         </td>
-        <td>${formatDate(c.created_at)}</td>
+        <td>${formatDate(c.createdAt)}</td>
         <td>
           <div class="table-actions">
             <button class="btn-icon" onclick="editChip('${c.id}')" title="Editar">✏️</button>
@@ -310,10 +342,11 @@ async function saveChip() {
   if (!data.numero_sim) { showToast('El número SIM es obligatorio', 'error'); return; }
   try {
     if (id) {
-      await supabase.from('chips').update(data).eq('id', id);
+      await db.collection('chips').doc(id).update(data);
       showToast('Chip actualizado correctamente');
     } else {
-      await supabase.from('chips').insert(data);
+      data.createdAt = new Date().toISOString();
+      await db.collection('chips').add(data);
       showToast('Chip registrado correctamente');
     }
     closeModal(document.getElementById('chip-modal'));
@@ -321,16 +354,18 @@ async function saveChip() {
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
-function editChip(id) {
-  supabase.from('chips').select('*').eq('id', id).single().then(({ data, error }) => {
-    if (error || !data) { showToast('Error al cargar chip', 'error'); return; }
-    document.getElementById('chip-id').value = data.id;
+async function editChip(id) {
+  try {
+    const doc = await db.collection('chips').doc(id).get();
+    if (!doc.exists) { showToast('Error al cargar chip', 'error'); return; }
+    const data = doc.data();
+    document.getElementById('chip-id').value = doc.id;
     document.getElementById('chip-numero').value = data.numero_sim || '';
     document.getElementById('chip-operador').value = data.operador || '';
     document.getElementById('chip-estado').value = data.estado || 'disponible';
     document.getElementById('modal-chip-title').textContent = 'Editar Chip';
     openModal('chip-modal');
-  });
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
 function resetChipForm() {
@@ -344,7 +379,7 @@ function resetChipForm() {
 async function deleteChip(id) {
   if (!confirm('¿Estás seguro de eliminar este chip?')) return;
   try {
-    await supabase.from('chips').delete().eq('id', id);
+    await db.collection('chips').doc(id).delete();
     showToast('Chip eliminado');
     loadChips();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
@@ -359,17 +394,19 @@ async function loadAsignaciones() {
 
 async function loadAsignacionForm() {
   try {
-    const [empRes, chipRes] = await Promise.all([
-      supabase.from('empleados').select('id, nombre').order('nombre'),
-      supabase.from('chips').select('id, numero_sim').eq('estado', 'disponible').order('numero_sim')
+    const [empSnap, chipSnap] = await Promise.all([
+      db.collection('empleados').orderBy('nombre').get(),
+      db.collection('chips').where('estado', '==', 'disponible').orderBy('numero_sim').get()
     ]);
+    const empleados = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const empSelect = document.getElementById('asig-empleado');
     const chipSelect = document.getElementById('asig-chip');
     empSelect.innerHTML = '<option value="">Seleccionar...</option>' +
-      (empRes.data || []).map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+      empleados.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
     chipSelect.innerHTML = '<option value="">Seleccionar...</option>' +
-      (chipRes.data || []).map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
-    document.getElementById('asignar-disponibles').textContent = (chipRes.data || []).length;
+      chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
+    document.getElementById('asignar-disponibles').textContent = chips.length;
   } catch (err) {
     showToast('Error al cargar formulario', 'error');
   }
@@ -383,13 +420,26 @@ async function asignarChip() {
   const observaciones = document.getElementById('asig-observaciones').value.trim();
   if (!empleado_id || !chip_id) { showToast('Seleccioná empleado y chip', 'error'); return; }
   try {
-    const { error: asigError } = await supabase.from('asignaciones').insert({
-      chip_id, empleado_id, celular_asignado: celular, modelo_celular: modelo, observaciones,
-      fecha_asignacion: new Date().toISOString().split('T')[0]
+    const [empDoc, chipDoc] = await Promise.all([
+      db.collection('empleados').doc(empleado_id).get(),
+      db.collection('chips').doc(chip_id).get()
+    ]);
+    if (!empDoc.exists || !chipDoc.exists) { showToast('Empleado o chip no encontrado', 'error'); return; }
+    const empData = empDoc.data();
+    const chipData = chipDoc.data();
+    await db.collection('asignaciones').add({
+      chip_id,
+      chip_numero: chipData.numero_sim,
+      empleado_id,
+      empleado_nombre: empData.nombre,
+      celular_asignado: celular,
+      modelo_celular: modelo,
+      observaciones,
+      fecha_asignacion: new Date().toISOString().split('T')[0],
+      fecha_devolucion: null,
+      createdAt: new Date().toISOString()
     });
-    if (asigError) throw asigError;
-    const { error: updError } = await supabase.from('chips').update({ estado: 'asignado' }).eq('id', chip_id);
-    if (updError) throw updError;
+    await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
     showToast('Chip asignado correctamente');
     document.getElementById('asig-empleado').value = '';
     document.getElementById('asig-chip').value = '';
@@ -404,20 +454,15 @@ async function loadAsignacionHistorial() {
   const tbody = document.getElementById('historial-tbody');
   tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando...</td></tr>';
   try {
-    const { data, error } = await supabase
-      .from('asignaciones')
-      .select('*, empleados!inner(nombre), chips!inner(numero_sim)')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) throw error;
-    if (!data || data.length === 0) {
+    const data = await getAsignaciones();
+    if (data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(a => `
       <tr>
-        <td>${escapeHtml(a.empleados?.nombre || '—')}</td>
-        <td><strong>${escapeHtml(a.chips?.numero_sim || '—')}</strong></td>
+        <td>${escapeHtml(a.empleado_nombre || '—')}</td>
+        <td><strong>${escapeHtml(a.chip_numero || '—')}</strong></td>
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
         <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
@@ -437,10 +482,10 @@ async function loadAsignacionHistorial() {
 async function devolverChip(asigId, chipId) {
   if (!confirm('¿Confirmás la devolución de este chip?')) return;
   try {
-    await supabase.from('asignaciones').update({
+    await db.collection('asignaciones').doc(asigId).update({
       fecha_devolucion: new Date().toISOString().split('T')[0]
-    }).eq('id', asigId);
-    await supabase.from('chips').update({ estado: 'disponible' }).eq('id', chipId);
+    });
+    await db.collection('chips').doc(chipId).update({ estado: 'disponible' });
     showToast('Chip devuelto correctamente');
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
@@ -449,7 +494,7 @@ async function devolverChip(asigId, chipId) {
 async function deleteAsignacion(id) {
   if (!confirm('¿Eliminar esta asignación del historial?')) return;
   try {
-    await supabase.from('asignaciones').delete().eq('id', id);
+    await db.collection('asignaciones').doc(id).delete();
     showToast('Asignación eliminada del historial');
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
@@ -507,13 +552,28 @@ async function importarExcel() {
       const sector = row['SECTOR'] || row['Sector'] || row['sector'] || '';
       const observaciones = row['Observaciones'] || row['observaciones'] || '';
       if (!nombre) { errores++; continue; }
-      const { error } = await supabase.from('empleados').insert(
-        { nombre: String(nombre).trim(), telefono: String(telefono).trim(), email: String(email).trim(), contraseña: String(contraseña).trim(), sector: String(sector).trim(), observaciones: String(observaciones).trim() }
-      );
-      if (error) {
-        if (error.code === '23505') { importados++; }
-        else { errores++; }
-      } else { importados++; }
+      const existing = await db.collection('empleados')
+        .where('nombre', '==', String(nombre).trim()).get();
+      if (existing.empty) {
+        await db.collection('empleados').add({
+          nombre: String(nombre).trim(),
+          telefono: String(telefono).trim(),
+          email: String(email).trim(),
+          contraseña: String(contraseña).trim(),
+          sector: String(sector).trim(),
+          observaciones: String(observaciones).trim(),
+          createdAt: new Date().toISOString()
+        });
+      } else {
+        await db.collection('empleados').doc(existing.docs[0].id).update({
+          telefono: String(telefono).trim(),
+          email: String(email).trim(),
+          contraseña: String(contraseña).trim(),
+          sector: String(sector).trim(),
+          observaciones: String(observaciones).trim()
+        });
+      }
+      importados++;
     } catch (e) { errores++; }
   }
   showToast(`Importación completada: ${importados} importados, ${errores} errores`, errores > 0 ? 'warning' : 'success');
@@ -555,4 +615,4 @@ function closeModal(modal) {
   if (modal) modal.classList.remove('show');
 }
 
-document.addEventListener('DOMContentLoaded', initSupabase);
+document.addEventListener('DOMContentLoaded', initFirebase);

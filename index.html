@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Control de Chips - Patagonia Flooring</title>
 <link rel="stylesheet" href="styles.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -258,6 +259,7 @@
             <li>El archivo debe tener columnas como: Nombre, Teléfono, Email, Sector, etc.</li>
             <li>Los empleados se importarán evitando duplicados por nombre</li>
             <li>Después de importar, revisá la sección Empleados y luego cargá los chips manualmente</li>
+            <li>También podés importar los chips con <strong>Nuevo Chip</strong> desde la sección Chips SIM</li>
           </ul>
         </div>
       </div>

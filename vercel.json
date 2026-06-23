@@ -1,8 +1,3 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".",
-  "framework": null,
-  "routes": [
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  "framework": null
 }

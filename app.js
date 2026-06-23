@@ -1,32 +1,74 @@
-const SUPABASE_URL = window.__SUPABASE_URL__ || '';
-const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__ || '';
-
 let supabase;
 
-function initSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    document.body.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;font-family:system-ui,sans-serif">
-        <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:500px;text-align:center">
-          <div style="font-size:48px;margin-bottom:16px">🔧</div>
-          <h1 style="font-size:20px;margin-bottom:8px">Configuración requerida</h1>
-          <p style="color:#64748b;margin-bottom:24px">Conectá este proyecto con Supabase para empezar.</p>
-          <div style="text-align:left;background:#f8fafc;padding:16px;border-radius:8px;font-size:13px;margin-bottom:24px">
-            <strong>Pasos:</strong>
-            <ol style="margin:8px 0 0 16px;line-height:1.8">
-              <li>Creá un proyecto en <a href="https://supabase.com" target="_blank" style="color:#0a6e6e">supabase.com</a> (gratis)</li>
-              <li>Andá a Settings → API y copiá URL y Anon Key</li>
-              <li>Ejecutá <code>schema.sql</code> en el SQL Editor</li>
-              <li>Creá <code>config.js</code> o setéa variables de entorno en Vercel</li>
-            </ol>
-          </div>
-          <p style="font-size:12px;color:#94a3b8">Ver <strong>config.example.js</strong> para más detalles</p>
+function getSupabaseConfig() {
+  const saved = localStorage.getItem('supabase_config');
+  if (saved) {
+    try { return JSON.parse(saved); } catch (e) { return null; }
+  }
+  return null;
+}
+
+function saveSupabaseConfig(url, key) {
+  localStorage.setItem('supabase_config', JSON.stringify({ url, key }));
+}
+
+function showSetupScreen() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg,#f1f5f9);font-family:system-ui,sans-serif">
+      <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:500px;width:90%">
+        <div style="font-size:48px;margin-bottom:16px;text-align:center">🔧</div>
+        <h1 style="font-size:20px;margin-bottom:4px;text-align:center">Conectar con Supabase</h1>
+        <p style="color:#64748b;margin-bottom:24px;text-align:center;font-size:14px">Ingresá las credenciales de tu proyecto Supabase</p>
+        <div style="text-align:left;background:#f8fafc;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:24px">
+          <strong style="display:block;margin-bottom:4px">¿Dónde encuentro esto?</strong>
+          <ol style="margin:0 0 0 16px;line-height:1.8">
+            <li>Creá un proyecto en <a href="https://supabase.com" target="_blank" style="color:#0a6e6e">supabase.com</a> (gratis)</li>
+            <li>Andá a <strong>Settings → API</strong></li>
+            <li>Copiá <strong>Project URL</strong> y <strong>anon public key</strong></li>
+            <li>Ejecutá <code>schema.sql</code> en el SQL Editor</li>
+          </ol>
         </div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Supabase URL</label>
+          <input type="text" id="setup-url" placeholder="https://xyz.supabase.co" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">
+        </div>
+        <div style="margin-bottom:24px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Anon Public Key</label>
+          <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIs..." style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">
+        </div>
+        <button id="btn-setup" style="width:100%;padding:10px;background:#0a6e6e;color:white;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer">Conectar</button>
+        <p id="setup-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none"></p>
       </div>
-    `;
+    </div>
+  `;
+  document.getElementById('btn-setup').addEventListener('click', async () => {
+    const url = document.getElementById('setup-url').value.trim();
+    const key = document.getElementById('setup-key').value.trim();
+    if (!url || !key) {
+      document.getElementById('setup-error').textContent = 'Completá ambos campos';
+      document.getElementById('setup-error').style.display = 'block';
+      return;
+    }
+    try {
+      const testClient = supabaseJs.createClient(url, key, { auth: { persistSession: false } });
+      const { error } = await testClient.from('empleados').select('id', { count: 'exact', head: true });
+      saveSupabaseConfig(url, key);
+      window.location.reload();
+    } catch (e) {
+      document.getElementById('setup-error').textContent = 'Error: ' + e.message;
+      document.getElementById('setup-error').style.display = 'block';
+    }
+  });
+}
+
+function initSupabase() {
+  const config = getSupabaseConfig();
+  if (!config) {
+    showSetupScreen();
     return;
   }
-  supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  supabase = supabaseJs.createClient(config.url, config.key, {
     auth: { persistSession: false }
   });
   init();

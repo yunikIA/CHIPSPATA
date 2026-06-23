@@ -136,6 +136,7 @@ function setupNavigation() {
   document.getElementById('btn-salvar-chip').addEventListener('click', saveChip);
   document.getElementById('btn-asignar').addEventListener('click', asignarChip);
   document.getElementById('btn-importar').addEventListener('click', importarExcel);
+  document.getElementById('btn-limpiar-todo').addEventListener('click', limpiarTodo);
   document.getElementById('file-input').addEventListener('change', previewExcel);
   document.getElementById('import-area').addEventListener('click', () => document.getElementById('file-input').click());
   document.getElementById('search-empleados').addEventListener('input', () => loadEmpleados());
@@ -584,6 +585,37 @@ async function importarExcel() {
   document.getElementById('import-preview').style.display = 'none';
   document.getElementById('btn-importar').style.display = 'none';
   document.getElementById('file-input').value = '';
+}
+
+// ========== LIMPIAR TODO ==========
+
+async function limpiarTodo() {
+  if (!confirm('¿Estás SEGURO de eliminar TODOS los datos?\n\nEmpleados, chips y asignaciones se borrarán permanentemente.')) return;
+  if (!confirm('⚠️ Confirmación final:\n\nEsta acción NO se puede deshacer. ¿Eliminar todo?')) return;
+
+  const btn = document.getElementById('btn-limpiar-todo');
+  const progress = document.getElementById('limpiar-progress');
+  btn.disabled = true;
+  progress.style.display = 'inline';
+
+  try {
+    const colecciones = ['asignaciones', 'chips', 'empleados'];
+    let total = 0;
+    for (const nombre of colecciones) {
+      const snapshot = await db.collection(nombre).get();
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      total += snapshot.size;
+    }
+    showToast(`✅ Todos los datos eliminados (${total} documentos)`);
+    loadDashboard();
+  } catch (err) {
+    showToast('Error al limpiar datos: ' + err.message, 'error');
+  }
+
+  btn.disabled = false;
+  progress.style.display = 'none';
 }
 
 // ========== UTILIDADES ==========

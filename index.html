@@ -252,7 +252,7 @@
           <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
         </div>
         <div id="import-preview" style="display:none;margin-top:16px"></div>
-        <button class="btn btn-success" id="btn-importar" style="display:none;margin-top:16px">📥 Importar a Supabase</button>
+        <button class="btn btn-success" id="btn-importar" style="display:none;margin-top:16px">📥 Importar</button>
         <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;font-size:13px;color:var(--text-muted)">
           <strong>💡 Tips:</strong>
           <ul style="margin:8px 0 0 16px">
@@ -262,6 +262,15 @@
             <li>También podés importar los chips con <strong>Nuevo Chip</strong> desde la sección Chips SIM</li>
           </ul>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#fecaca;margin-top:24px">
+      <div class="card-header" style="color:#dc2626;background:#fef2f2">⚠️ Zona de Peligro</div>
+      <div class="card-body">
+        <p style="font-size:14px;color:#64748b;margin-bottom:12px">Eliminá todos los datos del sistema (empleados, chips y asignaciones). Esta acción no se puede deshacer.</p>
+        <button class="btn btn-danger" id="btn-limpiar-todo">🗑️ Eliminar Todos los Datos</button>
+        <span id="limpiar-progress" style="font-size:13px;color:var(--text-muted);margin-left:12px;display:none">Eliminando...</span>
       </div>
     </div>
   </div>

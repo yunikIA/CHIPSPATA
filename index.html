@@ -24,6 +24,7 @@
     <a data-section="empleados">Empleados</a>
     <a data-section="chips">Chips SIM</a>
     <a data-section="asignaciones">Asignaciones</a>
+    <a data-section="sectores">Sectores</a>
     <a data-section="importar">Importar</a>
   </div>
   <div class="nav-links" style="margin-left:auto">
@@ -92,19 +93,6 @@
           <input type="text" id="search-empleados" placeholder="Buscar por nombre...">
           <select id="filter-sector">
             <option value="">Todos los sectores</option>
-            <option value="SWAT">SWAT</option>
-            <option value="GENESIS">GÉNESIS</option>
-            <option value="FABRICA">FÁBRICA</option>
-            <option value="INSTALADORES">INSTALADORES</option>
-            <option value="COMERCIALES">COMERCIALES</option>
-            <option value="COORDINACION">COORDINACIÓN</option>
-            <option value="BONA">BONA</option>
-            <option value="REDES">REDES</option>
-            <option value="IMAGEN">IMAGEN</option>
-            <option value="ASISTENTES">ASISTENTES</option>
-            <option value="CONTADURIA">CONTADURÍA</option>
-            <option value="FOUNDERS">FOUNDERS</option>
-            <option value="SEGURIDAD">SEGURIDAD</option>
           </select>
         </div>
         <div class="table-container">
@@ -189,6 +177,7 @@
           <div class="form-group">
             <label>Empleado</label>
             <select id="asig-empleado"><option value="">Cargando...</option></select>
+            <p id="asig-sector-info" style="margin-top:4px;font-size:12px;color:var(--text-muted);display:none"></p>
           </div>
           <div class="form-group">
             <label>Chip SIM</label>
@@ -223,6 +212,7 @@
             <thead>
               <tr>
                 <th>Empleado</th>
+                <th>Sector</th>
                 <th>Chip SIM</th>
                 <th>Asignación</th>
                 <th>Devolución</th>
@@ -231,7 +221,39 @@
               </tr>
             </thead>
             <tbody id="historial-tbody">
-              <tr><td colspan="6" class="loading">Cargando...</td></tr>
+              <tr><td colspan="7" class="loading">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTORES -->
+  <div id="section-sectores" class="section">
+    <div class="section-header">
+      <div>
+        <h1>Sectores</h1>
+        <div class="subtitle">Gestionar departamentos y áreas de la empresa</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btn-nuevo-sector">+ Nuevo Sector</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Color</th>
+                <th>Nombre</th>
+                <th>Creado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="sectores-tbody">
+              <tr><td colspan="4" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -311,7 +333,7 @@
         </div>
         <div class="form-group">
           <label>Sector</label>
-          <input type="text" id="emp-sector" placeholder="Ej: SWAT, GENESIS...">
+          <select id="emp-sector"><option value="">Sin sector</option></select>
         </div>
       </div>
       <div class="form-group">
@@ -357,6 +379,34 @@
     <div class="modal-footer">
       <button class="btn btn-secondary modal-cancel">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar-chip">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SECTOR -->
+<div class="modal-overlay" id="sector-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-sector-title">Nuevo Sector</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sector-id">
+      <div class="form-group">
+        <label>Nombre del sector *</label>
+        <input type="text" id="sector-nombre" placeholder="Ej: VENTAS, LOGÍSTICA...">
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="color" id="sector-color" value="#64748b" style="width:48px;height:36px;padding:2px">
+          <span id="sector-color-val" style="font-size:13px;color:var(--text-muted)">#64748b</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-sector">Guardar</button>
     </div>
   </div>
 </div>

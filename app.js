@@ -116,6 +116,8 @@ async function getAsignaciones() {
 let currentSection = 'dashboard';
 
 async function init() {
+  await cargarSectoresDefecto();
+  await llenarSelectSectores('filter-sector', '', 'Todos los sectores');
   setupNavigation();
   loadSection('dashboard');
 }
@@ -130,7 +132,7 @@ function setupNavigation() {
       link.classList.add('active');
     });
   });
-  document.getElementById('btn-nuevo-empleado').addEventListener('click', () => { resetEmpleadoForm(); openModal('empleado-modal'); });
+  document.getElementById('btn-nuevo-empleado').addEventListener('click', async () => { await resetEmpleadoForm(); openModal('empleado-modal'); });
   document.getElementById('btn-salvar-empleado').addEventListener('click', saveEmpleado);
   document.getElementById('btn-nuevo-chip').addEventListener('click', () => { resetChipForm(); openModal('chip-modal'); });
   document.getElementById('btn-salvar-chip').addEventListener('click', saveChip);
@@ -148,6 +150,11 @@ function setupNavigation() {
   });
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay); });
+  });
+  document.getElementById('btn-nuevo-sector').addEventListener('click', () => { resetSectorForm(); openModal('sector-modal'); });
+  document.getElementById('btn-salvar-sector').addEventListener('click', saveSector);
+  document.getElementById('sector-color').addEventListener('input', function() {
+    document.getElementById('sector-color-val').textContent = this.value;
   });
   document.getElementById('btn-guardar-config-email').addEventListener('click', guardarConfigEmail);
 }
@@ -170,6 +177,7 @@ function loadSection(section) {
     case 'empleados': loadEmpleados(); break;
     case 'chips': loadChips(); break;
     case 'asignaciones': loadAsignaciones(); break;
+    case 'sectores': loadSectores(); break;
     case 'importar': break;
   }
 }
@@ -270,21 +278,21 @@ async function editEmpleado(id) {
     document.getElementById('emp-telefono').value = data.telefono || '';
     document.getElementById('emp-email').value = data.email || '';
     document.getElementById('emp-contraseña').value = data.contraseña || '';
-    document.getElementById('emp-sector').value = data.sector || '';
     document.getElementById('emp-observaciones').value = data.observaciones || '';
+    await llenarSelectSectores('emp-sector', data.sector || '');
     document.getElementById('modal-empleado-title').textContent = 'Editar Empleado';
     openModal('empleado-modal');
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
-function resetEmpleadoForm() {
+async function resetEmpleadoForm() {
   document.getElementById('empleado-id').value = '';
   document.getElementById('emp-nombre').value = '';
   document.getElementById('emp-telefono').value = '';
   document.getElementById('emp-email').value = '';
   document.getElementById('emp-contraseña').value = '';
-  document.getElementById('emp-sector').value = '';
   document.getElementById('emp-observaciones').value = '';
+  await llenarSelectSectores('emp-sector');
   document.getElementById('modal-empleado-title').textContent = 'Nuevo Empleado';
 }
 
@@ -387,6 +395,124 @@ async function deleteChip(id) {
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
+// ========== SECTORES ==========
+
+const SECTORES_DEFECTO = [
+  'SWAT', 'GÉNESIS', 'FÁBRICA', 'INSTALADORES', 'COMERCIALES',
+  'COORDINACIÓN', 'BONA', 'REDES', 'IMAGEN', 'ASISTENTES',
+  'CONTADURÍA', 'FOUNDERS', 'SEGURIDAD', 'SERVICIO TÉCNICO'
+];
+
+async function cargarSectoresDefecto() {
+  try {
+    const snap = await db.collection('sectores').limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    for (const nombre of SECTORES_DEFECTO) {
+      const ref = db.collection('sectores').doc();
+      batch.set(ref, { nombre, color: '#64748b', createdAt: new Date().toISOString() });
+    }
+    await batch.commit();
+  } catch (e) {
+    console.warn('Error al crear sectores por defecto:', e);
+  }
+}
+
+async function getSectores() {
+  const snap = await db.collection('sectores').orderBy('nombre').get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadSectores() {
+  const tbody = document.getElementById('sectores-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando...</td></tr>';
+  try {
+    const data = await getSectores();
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">🏷️</div><p>No hay sectores creados</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(s => `
+      <tr>
+        <td><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${escapeHtml(s.color || '#64748b')};vertical-align:middle;margin-right:8px"></span></td>
+        <td><strong>${escapeHtml(s.nombre)}</strong></td>
+        <td>${formatDate(s.createdAt)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn-icon" onclick="editSector('${s.id}')" title="Editar">✏️</button>
+            <button class="btn-icon" onclick="deleteSector('${s.id}')" title="Eliminar">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    showToast('Error al cargar sectores', 'error');
+  }
+}
+
+async function saveSector() {
+  const id = document.getElementById('sector-id').value;
+  const data = {
+    nombre: document.getElementById('sector-nombre').value.trim().toUpperCase(),
+    color: document.getElementById('sector-color').value
+  };
+  if (!data.nombre) { showToast('El nombre es obligatorio', 'error'); return; }
+  try {
+    if (id) {
+      await db.collection('sectores').doc(id).update(data);
+      showToast('Sector actualizado');
+    } else {
+      data.createdAt = new Date().toISOString();
+      await db.collection('sectores').add(data);
+      showToast('Sector creado');
+    }
+    closeModal(document.getElementById('sector-modal'));
+    loadSectores();
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function editSector(id) {
+  try {
+    const doc = await db.collection('sectores').doc(id).get();
+    if (!doc.exists) return;
+    const d = doc.data();
+    document.getElementById('sector-id').value = doc.id;
+    document.getElementById('sector-nombre').value = d.nombre || '';
+    document.getElementById('sector-color').value = d.color || '#64748b';
+    document.getElementById('modal-sector-title').textContent = 'Editar Sector';
+    openModal('sector-modal');
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+function resetSectorForm() {
+  document.getElementById('sector-id').value = '';
+  document.getElementById('sector-nombre').value = '';
+  document.getElementById('sector-color').value = '#64748b';
+  document.getElementById('modal-sector-title').textContent = 'Nuevo Sector';
+}
+
+async function deleteSector(id) {
+  if (!confirm('¿Eliminar este sector?')) return;
+  try {
+    await db.collection('sectores').doc(id).delete();
+    showToast('Sector eliminado');
+    loadSectores();
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function llenarSelectSectores(selectId, selected, emptyLabel) {
+  const select = document.getElementById(selectId);
+  emptyLabel = emptyLabel || 'Sin sector';
+  try {
+    const data = await getSectores();
+    select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>` +
+      data.map(s => `<option value="${escapeHtml(s.nombre)}" ${s.nombre === selected ? 'selected' : ''}>${escapeHtml(s.nombre)}</option>`).join('');
+  } catch (e) {
+    select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>`;
+  }
+}
+
 // ========== ASIGNACIONES ==========
 
 async function loadAsignaciones() {
@@ -398,17 +524,29 @@ async function loadAsignacionForm() {
   try {
     const [empSnap, chipSnap] = await Promise.all([
       db.collection('empleados').orderBy('nombre').get(),
-      db.collection('chips').where('estado', '==', 'disponible').orderBy('numero_sim').get()
+      db.collection('chips').where('estado', '==', 'disponible').get()
     ]);
     const empleados = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    chips.sort((a, b) => (a.numero_sim || '').localeCompare(b.numero_sim || ''));
     const empSelect = document.getElementById('asig-empleado');
     const chipSelect = document.getElementById('asig-chip');
     empSelect.innerHTML = '<option value="">Seleccionar...</option>' +
-      empleados.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+      empleados.map(e => `<option value="${e.id}" data-sector="${escapeHtml(e.sector || '')}">${escapeHtml(e.nombre)}</option>`).join('');
     chipSelect.innerHTML = '<option value="">Seleccionar...</option>' +
       chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;
+    empSelect.addEventListener('change', () => {
+      const opt = empSelect.options[empSelect.selectedIndex];
+      const sector = opt ? opt.dataset.sector : '';
+      const info = document.getElementById('asig-sector-info');
+      if (sector) {
+        info.textContent = '🏢 ' + sector;
+        info.style.display = 'block';
+      } else {
+        info.style.display = 'none';
+      }
+    });
   } catch (err) {
     showToast('Error al cargar formulario', 'error');
   }
@@ -434,6 +572,7 @@ async function asignarChip() {
       chip_numero: chipData.numero_sim,
       empleado_id,
       empleado_nombre: empData.nombre,
+      empleado_sector: empData.sector || '',
       celular_asignado: celular,
       modelo_celular: modelo,
       observaciones,
@@ -465,6 +604,7 @@ async function loadAsignacionHistorial() {
     tbody.innerHTML = data.map(a => `
       <tr>
         <td>${escapeHtml(a.empleado_nombre || '—')}</td>
+        <td>${a.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(a.empleado_sector) + '</span>' : '—'}</td>
         <td><strong>${escapeHtml(a.chip_numero || '—')}</strong></td>
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>

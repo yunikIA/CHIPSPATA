@@ -1,84 +1,84 @@
 let db;
 
-function getFirebaseConfig() {
-  const saved = localStorage.getItem('firebase_config');
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDIF9gKLFtKdXES3t6nMYj1qzWZSIpL4Wc",
+  authDomain: "patagonia-d046b.firebaseapp.com",
+  projectId: "patagonia-d046b",
+  storageBucket: "patagonia-d046b.firebasestorage.app",
+  messagingSenderId: "406123605994",
+  appId: "1:406123605994:web:698156df39e793ec46cc93"
+};
+
+function initFirebase() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    db.settings({ merge: true });
+    const emailCfg = getEmailConfig();
+    if (emailCfg && typeof emailjs !== 'undefined') {
+      emailjs.init(emailCfg.publicKey);
+    }
+    init();
+  } catch (e) {
+    document.getElementById('app').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;color:#dc2626">Error al conectar con Firebase: ${e.message}</div>`;
+  }
+}
+
+// ========== EMAILJS ==========
+
+function getEmailConfig() {
+  const saved = localStorage.getItem('emailjs_config');
   if (saved) {
-    try { return JSON.parse(saved); } catch (e) { return null; }
+    try { return JSON.parse(saved); } catch { return null; }
   }
   return null;
 }
 
-function saveFirebaseConfig(config) {
-  localStorage.setItem('firebase_config', JSON.stringify(config));
+function saveEmailConfig(config) {
+  localStorage.setItem('emailjs_config', JSON.stringify(config));
 }
 
-function showSetupScreen() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f1f5f9;font-family:system-ui,sans-serif">
-      <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:540px;width:90%">
-        <div style="font-size:48px;margin-bottom:16px;text-align:center">🔧</div>
-        <h1 style="font-size:20px;margin-bottom:4px;text-align:center">Conectar con Firebase</h1>
-        <p style="color:#64748b;margin-bottom:24px;text-align:center;font-size:14px">Pegá la configuración de tu proyecto Firebase</p>
-        <div style="text-align:left;background:#f8fafc;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:24px">
-          <strong style="display:block;margin-bottom:4px">¿Dónde encuentro esto?</strong>
-          <ol style="margin:0 0 0 16px;line-height:1.8">
-            <li>Andá a <a href="https://console.firebase.google.com" target="_blank" style="color:#0a6e6e">console.firebase.google.com</a></li>
-            <li>Creá un proyecto o usá uno existente</li>
-            <li>Andá a <strong>Configuración del proyecto → General → Tus apps → Web</strong></li>
-            <li>Copiá el objeto de configuración (firebaseConfig)</li>
-            <li>Activá <strong>Firestore Database</strong> en modo prueba</li>
-          </ol>
-        </div>
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Configuración de Firebase (JSON)</label>
-          <textarea id="setup-config" rows="6" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:monospace;resize:vertical" placeholder='Pegá acá el objeto firebaseConfig, ej:&#10;{"apiKey":"AIzaSy...","authDomain":"...","projectId":"..."}'></textarea>
-        </div>
-        <button id="btn-setup" style="width:100%;padding:10px;background:#0a6e6e;color:white;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer">Conectar</button>
-        <p id="setup-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none"></p>
-      </div>
-    </div>
-  `;
-  document.getElementById('btn-setup').addEventListener('click', async () => {
-    const val = document.getElementById('setup-config').value.trim();
-    if (!val) {
-      document.getElementById('setup-error').textContent = 'Pegá la configuración de Firebase';
-      document.getElementById('setup-error').style.display = 'block';
-      return;
-    }
-    try {
-      const config = JSON.parse(val);
-      if (!config.apiKey || !config.projectId) {
-        document.getElementById('setup-error').textContent = 'El JSON debe contener al menos apiKey y projectId';
-        document.getElementById('setup-error').style.display = 'block';
-        return;
-      }
-      firebase.initializeApp(config);
-      const testDb = firebase.firestore();
-      await testDb.collection('_test').doc('_test').set({ test: true });
-      await testDb.collection('_test').doc('_test').delete();
-      saveFirebaseConfig(config);
-      window.location.reload();
-    } catch (e) {
-      document.getElementById('setup-error').textContent = 'Error: ' + e.message;
-      document.getElementById('setup-error').style.display = 'block';
-    }
-  });
+function abrirConfigEmail() {
+  const cfg = getEmailConfig() || {};
+  document.getElementById('cfg-emailjs-key').value = cfg.publicKey || '';
+  document.getElementById('cfg-emailjs-service').value = cfg.serviceId || '';
+  document.getElementById('cfg-emailjs-template').value = cfg.templateId || '';
+  openModal('config-email-modal');
 }
 
-function initFirebase() {
-  const config = getFirebaseConfig();
-  if (!config) {
-    showSetupScreen();
+function guardarConfigEmail() {
+  const cfg = {
+    publicKey: document.getElementById('cfg-emailjs-key').value.trim(),
+    serviceId: document.getElementById('cfg-emailjs-service').value.trim(),
+    templateId: document.getElementById('cfg-emailjs-template').value.trim()
+  };
+  if (!cfg.publicKey || !cfg.serviceId || !cfg.templateId) {
+    showToast('Completá todos los campos de EmailJS', 'error');
     return;
   }
+  saveEmailConfig(cfg);
+  emailjs.init(cfg.publicKey);
+  closeModal(document.getElementById('config-email-modal'));
+  showToast('Configuración de Email guardada');
+}
+
+async function enviarEmailAsignacion(empleado, chip, asigData) {
+  const cfg = getEmailConfig();
+  if (!cfg) return;
   try {
-    firebase.initializeApp(config);
-    db = firebase.firestore();
-    db.settings({ merge: true });
-    init();
-  } catch (e) {
-    showSetupScreen();
+    if (typeof emailjs === 'undefined') return;
+    await emailjs.send(cfg.serviceId, cfg.templateId, {
+      to_email: empleado.email || '',
+      empleado_nombre: empleado.nombre || '',
+      chip_numero: chip.numero_sim || '',
+      telefono: empleado.telefono || '',
+      celular: asigData.celular ? 'Sí' : 'No',
+      modelo_celular: asigData.modelo || '',
+      fecha: new Date().toLocaleDateString('es-AR'),
+      sector: empleado.sector || ''
+    });
+  } catch (err) {
+    console.warn('EmailJS error:', err);
   }
 }
 
@@ -149,6 +149,7 @@ function setupNavigation() {
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay); });
   });
+  document.getElementById('btn-guardar-config-email').addEventListener('click', guardarConfigEmail);
 }
 
 function showToast(message, type = 'success') {
@@ -441,6 +442,7 @@ async function asignarChip() {
       createdAt: new Date().toISOString()
     });
     await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
+    enviarEmailAsignacion(empData, chipData, { celular, modelo });
     showToast('Chip asignado correctamente');
     document.getElementById('asig-empleado').value = '';
     document.getElementById('asig-chip').value = '';

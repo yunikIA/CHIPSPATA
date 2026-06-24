@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -24,6 +25,9 @@
     <a data-section="chips">Chips SIM</a>
     <a data-section="asignaciones">Asignaciones</a>
     <a data-section="importar">Importar</a>
+  </div>
+  <div class="nav-links" style="margin-left:auto">
+    <a onclick="abrirConfigEmail()" title="Configurar Email" style="font-size:18px">⚙️</a>
   </div>
 </div>
 
@@ -358,6 +362,49 @@
 </div>
 
 <div id="toast-container" class="toast-container"></div>
+
+<!-- MODAL CONFIG EMAIL -->
+<div class="modal-overlay" id="config-email-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙️ Configurar Email</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Se envía un email automático al empleado cuando se le asigna un chip.
+        Necesitás una cuenta gratis en <a href="https://www.emailjs.com" target="_blank" style="color:var(--primary)">EmailJS</a>.
+      </p>
+      <div class="form-group">
+        <label>Public Key (EmailJS)</label>
+        <input type="text" id="cfg-emailjs-key" placeholder="ej: 1A2B3C4D5E6F7G8H">
+      </div>
+      <div class="form-group">
+        <label>Service ID</label>
+        <input type="text" id="cfg-emailjs-service" placeholder="ej: service_abc123">
+      </div>
+      <div class="form-group">
+        <label>Template ID</label>
+        <input type="text" id="cfg-emailjs-template" placeholder="ej: template_def456">
+      </div>
+      <div style="padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:var(--text-muted)">
+        <strong>Variables disponibles en la plantilla:</strong><br>
+        <code>{"{to_email}"}</code> — Email del empleado<br>
+        <code>{"{empleado_nombre}"}</code> — Nombre del empleado<br>
+        <code>{"{chip_numero}"}</code> — Número SIM asignado<br>
+        <code>{"{telefono}"}</code> — Teléfono del empleado<br>
+        <code>{"{celular}"}</code> — Sí / No (incluye celular)<br>
+        <code>{"{modelo_celular}"}</code> — Modelo del celular<br>
+        <code>{"{fecha}"}</code> — Fecha de asignación<br>
+        <code>{"{sector}"}</code> — Sector del empleado
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-config-email">Guardar</button>
+    </div>
+  </div>
+</div>
 
 </div>
 

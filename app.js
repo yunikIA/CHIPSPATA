@@ -344,20 +344,35 @@ async function loadChips() {
 
 async function saveChip() {
   const id = document.getElementById('chip-id').value;
-  const data = {
-    numero_sim: document.getElementById('chip-numero').value.trim(),
-    operador: document.getElementById('chip-operador').value.trim(),
-    estado: document.getElementById('chip-estado').value
-  };
-  if (!data.numero_sim) { showToast('El número SIM es obligatorio', 'error'); return; }
+  const operador = document.getElementById('chip-operador').value.trim();
+  const estado = document.getElementById('chip-estado').value;
+  const rawNums = document.getElementById('chip-numero').value.trim();
+
+  if (!rawNums) { showToast('Ingresá al menos un número SIM', 'error'); return; }
+
+  const numeros = rawNums.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (numeros.length === 0) { showToast('Ingresá al menos un número SIM', 'error'); return; }
+
   try {
     if (id) {
-      await db.collection('chips').doc(id).update(data);
+      // Edit existing single chip
+      await db.collection('chips').doc(id).update({
+        numero_sim: numeros[0],
+        operador,
+        estado
+      });
       showToast('Chip actualizado correctamente');
     } else {
-      data.createdAt = new Date().toISOString();
-      await db.collection('chips').add(data);
-      showToast('Chip registrado correctamente');
+      // Bulk create
+      const batch = db.batch();
+      const now = new Date().toISOString();
+      for (const num of numeros) {
+        const ref = db.collection('chips').doc();
+        batch.set(ref, { numero_sim: num, operador, estado, createdAt: now });
+      }
+      await batch.commit();
+      showToast(`${numeros.length} chip(s) registrado(s) correctamente`);
     }
     closeModal(document.getElementById('chip-modal'));
     loadChips();

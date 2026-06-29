@@ -181,6 +181,16 @@ function setupNavigation() {
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
   });
+
+  // Event delegation for historial buttons
+  document.getElementById('historial-tbody').addEventListener('click', function(e) {
+    const verBtn = e.target.closest('.ver-acta-btn');
+    if (verBtn) { verActa(verBtn.dataset.url); return; }
+    const devBtn = e.target.closest('.devolver-btn');
+    if (devBtn) { devolverChip(devBtn.dataset.asig, devBtn.dataset.chip); return; }
+    const delBtn = e.target.closest('.delete-asig-btn');
+    if (delBtn) { deleteAsignacion(delBtn.dataset.id); return; }
+  });
 }
 
 function showToast(message, type = 'success') {
@@ -645,10 +655,11 @@ async function asignarChip() {
     // Upload acta foto if present
     if (actaFile) {
       const ext = actaFile.name.split('.').pop() || 'jpg';
-      const ref = storage.ref(`actas/${asigRef.id}.${ext}`);
+      const actaPath = `actas/${asigRef.id}.${ext}`;
+      const ref = storage.ref(actaPath);
       const snap = await ref.put(actaFile);
       const acta_url = await snap.ref.getDownloadURL();
-      await asigRef.update({ acta_url });
+      await asigRef.update({ acta_url, acta_path: actaPath });
     }
 
     await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
@@ -663,7 +674,14 @@ async function asignarChip() {
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
     loadAsignaciones();
-  } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  } catch (err) {
+    const msg = err.message.toLowerCase();
+    if (msg.includes('permission') || msg.includes('unauthorized')) {
+      showToast('Permiso denegado: activá las reglas públicas en Firebase Console > Storage > Reglas', 'error');
+    } else {
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
   btn.disabled = false;
   btn.textContent = '✓ Asignar Chip';
 }
@@ -677,23 +695,26 @@ async function loadAsignacionHistorial() {
       tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
       return;
     }
-    tbody.innerHTML = data.map(a => `
-      <tr>
+    tbody.innerHTML = data.map(a => {
+      const actaBtn = a.acta_url
+        ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver acta</button>`
+        : '—';
+      return `<tr>
         <td>${escapeHtml(a.empleado_nombre || '—')}</td>
         <td>${a.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(a.empleado_sector) + '</span>' : '—'}</td>
         <td><strong>${escapeHtml(a.chip_numero || '—')}</strong></td>
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
         <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
-        <td>${a.acta_url ? `<button class="btn btn-sm btn-outline" onclick="verActa('${escapeHtml(a.acta_url)}')">📄 Ver acta</button>` : '—'}</td>
+        <td>${actaBtn}</td>
         <td>
           <div class="table-actions">
-            ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning" onclick="devolverChip('${a.id}', '${a.chip_id}')">↩ Devolver</button>` : ''}
-            <button class="btn-icon" onclick="deleteAsignacion('${a.id}')" title="Eliminar">🗑️</button>
+            ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${a.id}" data-chip="${a.chip_id}">↩ Devolver</button>` : ''}
+            <button class="btn-icon delete-asig-btn" data-id="${a.id}" title="Eliminar">🗑️</button>
           </div>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
   }
@@ -714,9 +735,13 @@ async function devolverChip(asigId, chipId) {
 async function deleteAsignacion(id) {
   if (!confirm('¿Eliminar esta asignación del historial?')) return;
   try {
-    // Delete acta from Storage if exists (try common extensions)
-    for (const ext of ['jpg', 'jpeg', 'png', 'webp', 'heic']) {
-      try { await storage.ref(`actas/${id}.${ext}`).delete(); } catch (e) { /* try next */ }
+    // Delete acta from Storage using stored path
+    const doc = await db.collection('asignaciones').doc(id).get();
+    if (doc.exists) {
+      const actaPath = doc.data().acta_path;
+      if (actaPath) {
+        try { await storage.ref(actaPath).delete(); } catch (e) { /* already gone */ }
+      }
     }
     await db.collection('asignaciones').doc(id).delete();
     showToast('Asignación eliminada del historial');

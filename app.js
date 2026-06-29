@@ -257,6 +257,15 @@ async function saveEmpleado() {
   try {
     if (id) {
       await db.collection('empleados').doc(id).update(data);
+      // Update employee name/sector in all related asignaciones
+      const asigSnap = await db.collection('asignaciones').where('empleado_id', '==', id).get();
+      if (!asigSnap.empty) {
+        const batch = db.batch();
+        asigSnap.docs.forEach(doc => {
+          batch.update(doc.ref, { empleado_nombre: data.nombre, empleado_sector: data.sector || '' });
+        });
+        await batch.commit();
+      }
       showToast('Empleado actualizado correctamente');
     } else {
       data.createdAt = new Date().toISOString();

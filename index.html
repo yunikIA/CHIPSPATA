@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
@@ -194,6 +195,21 @@
             <input type="text" id="asig-modelo" placeholder="Ej: Moto G54">
           </div>
           <div class="form-group full-width">
+            <label>Acta firmada</label>
+            <div class="acta-upload" id="acta-upload-area">
+              <input type="file" id="acta-file" accept="image/*" capture="environment" style="display:none">
+              <div class="acta-upload-placeholder" id="acta-placeholder">
+                <div class="acta-icon">📷</div>
+                <p><strong>Adjuntar foto del acta</strong></p>
+                <p style="font-size:12px;color:var(--text-muted)">Hacé clic para seleccionar o sacar una foto</p>
+              </div>
+              <div class="acta-preview" id="acta-preview" style="display:none">
+                <img id="acta-img" alt="Acta firmada">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-quitar-acta">✕ Quitar foto</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group full-width">
             <label>Observaciones</label>
             <textarea id="asig-observaciones" placeholder="Notas adicionales..."></textarea>
           </div>
@@ -217,11 +233,12 @@
                 <th>Asignación</th>
                 <th>Devolución</th>
                 <th>Celular</th>
+                <th>Acta</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="historial-tbody">
-              <tr><td colspan="7" class="loading">Cargando...</td></tr>
+              <tr><td colspan="8" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -408,6 +425,22 @@
     <div class="modal-footer">
       <button class="btn btn-secondary modal-cancel">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar-sector">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VER ACTA -->
+<div class="modal-overlay" id="acta-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h2>Acta firmada</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:16px">
+      <img id="acta-modal-img" src="" alt="Acta" style="max-width:100%;max-height:70vh;border-radius:8px">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary modal-cancel">Cerrar</button>
     </div>
   </div>
 </div>

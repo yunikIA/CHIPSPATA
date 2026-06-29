@@ -1,4 +1,4 @@
-let db;
+let db, storage;
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDIF9gKLFtKdXES3t6nMYj1qzWZSIpL4Wc",
@@ -14,6 +14,7 @@ function initFirebase() {
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.firestore();
     db.settings({ merge: true });
+    storage = firebase.storage();
     const emailCfg = getEmailConfig();
     if (emailCfg && typeof emailjs !== 'undefined') {
       emailjs.init(emailCfg.publicKey);
@@ -157,6 +158,29 @@ function setupNavigation() {
     document.getElementById('sector-color-val').textContent = this.value;
   });
   document.getElementById('btn-guardar-config-email').addEventListener('click', guardarConfigEmail);
+
+  // Acta upload handlers
+  document.getElementById('acta-upload-area').addEventListener('click', e => {
+    if (e.target === document.getElementById('btn-quitar-acta')) return;
+    document.getElementById('acta-file').click();
+  });
+  document.getElementById('acta-file').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('acta-img').src = e.target.result;
+      document.getElementById('acta-placeholder').style.display = 'none';
+      document.getElementById('acta-preview').style.display = '';
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('btn-quitar-acta').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('acta-file').value = '';
+    document.getElementById('acta-preview').style.display = 'none';
+    document.getElementById('acta-placeholder').style.display = '';
+  });
 }
 
 function showToast(message, type = 'success') {
@@ -504,6 +528,7 @@ async function editSector(id) {
     document.getElementById('sector-id').value = doc.id;
     document.getElementById('sector-nombre').value = d.nombre || '';
     document.getElementById('sector-color').value = d.color || '#64748b';
+    document.getElementById('sector-color-val').textContent = d.color || '#64748b';
     document.getElementById('modal-sector-title').textContent = 'Editar Sector';
     openModal('sector-modal');
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
@@ -513,6 +538,7 @@ function resetSectorForm() {
   document.getElementById('sector-id').value = '';
   document.getElementById('sector-nombre').value = '';
   document.getElementById('sector-color').value = '#64748b';
+  document.getElementById('sector-color-val').textContent = '#64748b';
   document.getElementById('modal-sector-title').textContent = 'Nuevo Sector';
 }
 
@@ -560,6 +586,10 @@ async function loadAsignacionForm() {
     chipSelect.innerHTML = '<option value="">Seleccionar...</option>' +
       chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;
+    // Reset acta upload
+    document.getElementById('acta-file').value = '';
+    document.getElementById('acta-preview').style.display = 'none';
+    document.getElementById('acta-placeholder').style.display = '';
     empSelect.addEventListener('change', () => {
       const opt = empSelect.options[empSelect.selectedIndex];
       const sector = opt ? opt.dataset.sector : '';
@@ -582,16 +612,23 @@ async function asignarChip() {
   const celular = document.getElementById('asig-celular').checked;
   const modelo = document.getElementById('asig-modelo').value.trim();
   const observaciones = document.getElementById('asig-observaciones').value.trim();
+  const actaFile = document.getElementById('acta-file').files[0];
   if (!empleado_id || !chip_id) { showToast('Seleccioná empleado y chip', 'error'); return; }
+
+  const btn = document.getElementById('btn-asignar');
+  btn.disabled = true;
+  btn.textContent = 'Asignando...';
+
   try {
     const [empDoc, chipDoc] = await Promise.all([
       db.collection('empleados').doc(empleado_id).get(),
       db.collection('chips').doc(chip_id).get()
     ]);
-    if (!empDoc.exists || !chipDoc.exists) { showToast('Empleado o chip no encontrado', 'error'); return; }
+    if (!empDoc.exists || !chipDoc.exists) { showToast('Empleado o chip no encontrado', 'error'); btn.disabled = false; btn.textContent = '✓ Asignar Chip'; return; }
     const empData = empDoc.data();
     const chipData = chipDoc.data();
-    await db.collection('asignaciones').add({
+
+    const asigRef = await db.collection('asignaciones').add({
       chip_id,
       chip_numero: chipData.numero_sim,
       empleado_id,
@@ -604,6 +641,16 @@ async function asignarChip() {
       fecha_devolucion: null,
       createdAt: new Date().toISOString()
     });
+
+    // Upload acta foto if present
+    if (actaFile) {
+      const ext = actaFile.name.split('.').pop() || 'jpg';
+      const ref = storage.ref(`actas/${asigRef.id}.${ext}`);
+      const snap = await ref.put(actaFile);
+      const acta_url = await snap.ref.getDownloadURL();
+      await asigRef.update({ acta_url });
+    }
+
     await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
     enviarEmailAsignacion(empData, chipData, { celular, modelo });
     showToast('Chip asignado correctamente');
@@ -612,17 +659,22 @@ async function asignarChip() {
     document.getElementById('asig-celular').checked = false;
     document.getElementById('asig-modelo').value = '';
     document.getElementById('asig-observaciones').value = '';
+    document.getElementById('acta-file').value = '';
+    document.getElementById('acta-preview').style.display = 'none';
+    document.getElementById('acta-placeholder').style.display = '';
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  btn.disabled = false;
+  btn.textContent = '✓ Asignar Chip';
 }
 
 async function loadAsignacionHistorial() {
   const tbody = document.getElementById('historial-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando...</td></tr>';
   try {
     const data = await getAsignaciones();
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(a => `
@@ -633,6 +685,7 @@ async function loadAsignacionHistorial() {
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
         <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
+        <td>${a.acta_url ? `<button class="btn btn-sm btn-outline" onclick="verActa('${escapeHtml(a.acta_url)}')">📄 Ver acta</button>` : '—'}</td>
         <td>
           <div class="table-actions">
             ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning" onclick="devolverChip('${a.id}', '${a.chip_id}')">↩ Devolver</button>` : ''}
@@ -642,7 +695,7 @@ async function loadAsignacionHistorial() {
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
   }
 }
 
@@ -661,10 +714,19 @@ async function devolverChip(asigId, chipId) {
 async function deleteAsignacion(id) {
   if (!confirm('¿Eliminar esta asignación del historial?')) return;
   try {
+    // Delete acta from Storage if exists (try common extensions)
+    for (const ext of ['jpg', 'jpeg', 'png', 'webp', 'heic']) {
+      try { await storage.ref(`actas/${id}.${ext}`).delete(); } catch (e) { /* try next */ }
+    }
     await db.collection('asignaciones').doc(id).delete();
     showToast('Asignación eliminada del historial');
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+function verActa(url) {
+  document.getElementById('acta-modal-img').src = url;
+  openModal('acta-modal');
 }
 
 // ========== IMPORTAR EXCEL ==========

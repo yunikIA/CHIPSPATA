@@ -521,6 +521,29 @@ tr:hover { background: #f8fafc; }
 
 .assign-form .full-width { grid-column: 1 / -1; }
 
+/* Acta upload */
+.acta-upload {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.acta-upload:hover { border-color: var(--primary); background: #f8fafc; }
+.acta-upload .acta-icon { font-size: 32px; margin-bottom: 8px; }
+.acta-preview { position: relative; }
+.acta-preview img { max-height: 160px; border-radius: 6px; object-fit: cover; width: 100%; }
+.acta-preview .btn { margin-top: 8px; }
+
+/* Acta view in historial */
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { background: #f1f5f9; border-color: var(--primary); color: var(--primary); }
+
 /* Responsive */
 @media (max-width: 768px) {
   .navbar { padding: 0 16px; }

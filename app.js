@@ -800,7 +800,7 @@ async function asignarChip() {
   const observaciones = document.getElementById('asig-observaciones').value.trim();
   const actaFile = document.getElementById('acta-file').files[0];
 
-  // Check duplicates on active asignaciones
+  // Check duplicates
   for (const c of chipsData) {
     const existingAsig = await db.collection('asignaciones')
       .where('chip_id', '==', c.chip_id)
@@ -813,7 +813,6 @@ async function asignarChip() {
     }
   }
 
-  // Resolve empleado
   let empleado_id = document.getElementById('asig-empleado-id').value;
   const empNombre = document.getElementById('asig-nombre').value.trim();
   if (!empNombre) { showToast('Ingresá el nombre del empleado', 'error'); return; }
@@ -837,50 +836,50 @@ async function asignarChip() {
       empleado_id = empRef.id;
     }
 
-    const [empDoc] = await Promise.all([
-      db.collection('empleados').doc(empleado_id).get()
-    ]);
+    const empDoc = await db.collection('empleados').doc(empleado_id).get();
     if (!empDoc.exists) { showToast('Empleado no encontrado', 'error'); btn.disabled = false; btn.textContent = '✓ Asignar Chip'; return; }
     const empData = empDoc.data();
 
-    const asigRef = await db.collection('asignaciones').add({
-      chips: chipsData,
-      chip_id: chipsData[0].chip_id,
-      chip_numero: chipsData[0].chip_numero,
-      empleado_id,
-      empleado_nombre: empData.nombre,
-      empleado_sector: empData.sector || '',
-      celular_asignado: chipsData[0].celular_asignado,
-      modelo_celular: chipsData[0].modelo_celular,
-      control_parental: document.getElementById('asig-control-parental').checked,
-      cp_email: document.getElementById('asig-cp-email').value.trim(),
-      cp_pass: document.getElementById('asig-cp-pass').value.trim(),
-      observaciones,
-      fecha_asignacion: new Date().toISOString().split('T')[0],
-      fecha_devolucion: null,
-      createdAt: new Date().toISOString()
-    });
-
-    // Upload acta foto if present
-    if (actaFile) {
-      const ext = actaFile.name.split('.').pop() || 'jpg';
-      const actaPath = `actas/${asigRef.id}.${ext}`;
-      const ref = storage.ref(actaPath);
-      const snap = await ref.put(actaFile);
-      const acta_url = await snap.ref.getDownloadURL();
-      await asigRef.update({ acta_url, acta_path: actaPath });
-    }
-
-    // Mark all chips as assigned
-    for (const c of chipsData) {
-      await db.collection('chips').doc(c.chip_id).update({ estado: 'asignado' });
-    }
     const cpChecked = document.getElementById('asig-control-parental').checked;
     const cpEmail = document.getElementById('asig-cp-email').value.trim();
     const cpPass = document.getElementById('asig-cp-pass').value.trim();
-    enviarEmailAsignacion(empData, chipsData, {
-      control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass
-    });
+    const fecha = new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toISOString();
+
+    let firstAsigId = null;
+
+    for (const chip of chipsData) {
+      await db.collection('chips').doc(chip.chip_id).update({ estado: 'asignado' });
+      const asigRef = await db.collection('asignaciones').add({
+        chip_id: chip.chip_id,
+        chip_numero: chip.chip_numero,
+        empleado_id,
+        empleado_nombre: empData.nombre,
+        empleado_sector: empData.sector || '',
+        celular_asignado: chip.celular_asignado,
+        modelo_celular: chip.modelo_celular,
+        control_parental: cpChecked,
+        cp_email: cpEmail,
+        cp_pass: cpPass,
+        observaciones,
+        fecha_asignacion: fecha,
+        fecha_devolucion: null,
+        createdAt: timestamp
+      });
+      if (!firstAsigId) firstAsigId = asigRef.id;
+
+      // Attach acta to first chip entry only
+      if (actaFile && firstAsigId === asigRef.id) {
+        const ext = actaFile.name.split('.').pop() || 'jpg';
+        const actaPath = `actas/${asigRef.id}.${ext}`;
+        const ref = storage.ref(actaPath);
+        const snap = await ref.put(actaFile);
+        const acta_url = await snap.ref.getDownloadURL();
+        await asigRef.update({ acta_url, acta_path: actaPath });
+      }
+    }
+
+    enviarEmailAsignacion(empData, chipsData, { control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass });
     showToast('Chip(es) asignado(s) correctamente');
     resetAsignacionForm();
     loadAsignaciones();
@@ -929,26 +928,20 @@ async function loadAsignacionHistorial() {
       return;
     }
     tbody.innerHTML = data.map(a => {
-      const chips = a.chips || (a.chip_id ? [{ chip_id: a.chip_id, chip_numero: a.chip_numero, celular_asignado: a.celular_asignado, modelo_celular: a.modelo_celular }] : []);
-      const chipsHtml = chips.length > 1
-        ? `<details style="font-size:13px"><summary><strong>${chips.length} chips</strong></summary><div style="margin-top:4px">${chips.map(c => `<div>📱 ${escapeHtml(c.chip_numero)}${c.celular_asignado ? ' ✅' : ''}${c.modelo_celular ? ' (' + escapeHtml(c.modelo_celular) + ')' : ''}</div>`).join('')}</div></details>`
-        : (chips[0] ? `<strong>${escapeHtml(chips[0].chip_numero || '—')}</strong>` : '—');
+      const chipSim = a.chip_numero ? escapeHtml(a.chip_numero) : (a.chips ? `${a.chips.length} chips` : '—');
       const actaBtn = a.acta_url
         ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver acta</button>`
         : '—';
       const cpInfo = a.control_parental
         ? `<span class="badge badge-info" title="CP: ${escapeHtml(a.cp_email || '')}">🔒 ${escapeHtml(a.cp_email || 'Sí')}</span>`
         : '—';
-      const celularInfo = chips.filter(c => c.celular_asignado).length > 0
-        ? chips.filter(c => c.celular_asignado).map(c => `✅ ${c.modelo_celular ? `(${escapeHtml(c.modelo_celular)})` : 'Sí'}`).join('<br>')
-        : '❌ No';
       return `<tr>
         <td>${escapeHtml(a.empleado_nombre || '—')}</td>
         <td>${a.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(a.empleado_sector) + '</span>' : '—'}</td>
-        <td>${chipsHtml}</td>
+        <td><strong>${chipSim}</strong></td>
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
-        <td>${celularInfo}</td>
+        <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
         <td>${cpInfo}</td>
         <td>${actaBtn}</td>
         <td>
@@ -967,17 +960,11 @@ async function loadAsignacionHistorial() {
 async function devolverChip(asigId, chipId) {
   if (!confirm('¿Confirmás la devolución de este chip?')) return;
   try {
-    const asigDoc = await db.collection('asignaciones').doc(asigId).get();
-    const data = asigDoc.data();
     await db.collection('asignaciones').doc(asigId).update({
       fecha_devolucion: new Date().toISOString().split('T')[0]
     });
-    // Free all chips from the chips array, or fallback to chip_id
-    const chips = data.chips || [{ chip_id: chipId }];
-    for (const c of chips) {
-      try { await db.collection('chips').doc(c.chip_id).update({ estado: 'disponible' }); } catch (e) {}
-    }
-    showToast('Chip(es) devuelto(s) correctamente');
+    await db.collection('chips').doc(chipId).update({ estado: 'disponible' });
+    showToast('Chip devuelto correctamente');
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
@@ -992,11 +979,7 @@ async function deleteAsignacion(id) {
       if (actaPath) {
         try { await storage.ref(actaPath).delete(); } catch (e) { /* already gone */ }
       }
-      // Free all chips
-      const chips = d.chips || [{ chip_id: d.chip_id }];
-      for (const c of chips) {
-        try { await db.collection('chips').doc(c.chip_id).update({ estado: 'disponible' }); } catch (e) {}
-      }
+      try { await db.collection('chips').doc(d.chip_id).update({ estado: 'disponible' }); } catch (e) {}
     }
     await db.collection('asignaciones').doc(id).delete();
     showToast('Asignación eliminada del historial');

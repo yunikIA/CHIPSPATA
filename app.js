@@ -102,16 +102,23 @@ async function getEmpleados(opts = {}) {
 }
 
 async function getChips(opts = {}) {
-  let ref = db.collection('chips');
+  const snapshot = await db.collection('chips').get();
+  let chips = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   if (opts.search) {
-    const s = opts.search;
-    ref = ref.where('numero_sim', '>=', s).where('numero_sim', '<=', s + '\uf8ff');
+    const s = opts.search.toLowerCase();
+    chips = chips.filter(c => (c.numero_sim || '').toLowerCase().includes(s));
   }
-  if (opts.estado) ref = ref.where('estado', '==', opts.estado);
-  if (opts.orderBy) ref = ref.orderBy(opts.orderBy, opts.orderDir || 'asc');
-  else ref = ref.orderBy('createdAt', 'desc');
-  const snapshot = await ref.get();
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (opts.estado) chips = chips.filter(c => c.estado === opts.estado);
+  const dir = opts.orderDir === 'asc' ? 1 : -1;
+  const field = opts.orderBy || 'createdAt';
+  chips.sort((a, b) => {
+    const va = a[field], vb = b[field];
+    if (!va && !vb) return 0;
+    if (!va) return 1;
+    if (!vb) return -1;
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+  return chips;
 }
 
 async function getAsignaciones() {

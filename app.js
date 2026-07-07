@@ -128,6 +128,17 @@ async function getAsignaciones() {
 
 let currentSection = 'dashboard';
 
+document.addEventListener('input', e => {
+  if (e.target.matches('input[type="text"], input[type="email"], input[type="search"]')) {
+    const start = e.target.selectionStart;
+    const end = e.target.selectionEnd;
+    if (e.target.value !== e.target.value.toUpperCase()) {
+      e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(start, end);
+    }
+  }
+});
+
 async function init() {
   await cargarSectoresDefecto();
   await llenarSelectSectores('filter-sector', '', 'Todos los sectores');

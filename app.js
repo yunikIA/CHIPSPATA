@@ -63,18 +63,20 @@ function guardarConfigEmail() {
   showToast('Configuración de Email guardada');
 }
 
-async function enviarEmailAsignacion(empleado, chip, asigData) {
+async function enviarEmailAsignacion(empleado, chipsData, asigData) {
   const cfg = getEmailConfig();
   if (!cfg) return;
   try {
     if (typeof emailjs === 'undefined') return;
+    const chipList = chipsData.map(c => c.chip_numero).join(', ');
+    const chipModels = chipsData.filter(c => c.modelo_celular).map(c => `${c.chip_numero}: ${c.modelo_celular}`).join('; ');
     await emailjs.send(cfg.serviceId, cfg.templateId, {
       to_email: empleado.email || '',
       empleado_nombre: empleado.nombre || '',
-      chip_numero: chip.numero_sim || '',
+      chip_numero: chipList,
       telefono: empleado.telefono || '',
-      celular: asigData.celular ? 'Sí' : 'No',
-      modelo_celular: asigData.modelo || '',
+      celular: chipsData.some(c => c.celular_asignado) ? 'Sí' : 'No',
+      modelo_celular: chipModels || '—',
       control_parental: asigData.control_parental ? 'Sí' : 'No',
       cp_email: asigData.cp_email || '',
       cp_pass: asigData.cp_pass || '',
@@ -141,6 +143,16 @@ function setupNavigation() {
   document.getElementById('btn-nuevo-chip').addEventListener('click', () => { resetChipForm(); openModal('chip-modal'); });
   document.getElementById('btn-salvar-chip').addEventListener('click', saveChip);
   document.getElementById('btn-asignar').addEventListener('click', asignarChip);
+  document.getElementById('btn-add-chip').addEventListener('click', addChipRow);
+  document.getElementById('asig-chips-rows').addEventListener('click', function(e) {
+    if (e.target.closest('.btn-remove-chip')) {
+      const rows = this.querySelectorAll('.asig-chip-row');
+      if (rows.length > 1) {
+        e.target.closest('.asig-chip-row').remove();
+        setupChipSelectExclusion();
+      }
+    }
+  });
   document.getElementById('btn-importar').addEventListener('click', importarExcel);
   document.getElementById('btn-limpiar-todo').addEventListener('click', limpiarTodo);
   document.getElementById('file-input').addEventListener('change', previewExcel);
@@ -651,37 +663,62 @@ async function loadAsignaciones() {
   ]);
 }
 
+function addChipRow() {
+  const container = document.getElementById('asig-chips-rows');
+  const template = container.querySelector('.asig-chip-row');
+  const newRow = template.cloneNode(true);
+  // Copy options from first select (they're all the same)
+  const firstSelect = template.querySelector('.asig-chip-select');
+  newRow.querySelector('.asig-chip-select').innerHTML = firstSelect.innerHTML;
+  newRow.querySelector('.asig-chip-select').value = '';
+  newRow.querySelector('.asig-chip-celular').checked = false;
+  newRow.querySelector('.asig-chip-modelo').value = '';
+  container.appendChild(newRow);
+}
+
+// Mutex for chip selects via event delegation
+document.getElementById('asig-chips-rows').addEventListener('change', function(e) {
+  const sel = e.target.closest('.asig-chip-select');
+  if (!sel) return;
+  const selects = this.querySelectorAll('.asig-chip-select');
+  // Enable all options everywhere
+  selects.forEach(s => Array.from(s.options).forEach(opt => opt.disabled = false));
+  // Disable options selected in another row
+  const taken = {};
+  selects.forEach(s => { if (s.value) taken[s.value] = (taken[s.value] || 0) + 1; });
+  selects.forEach(s => {
+    Array.from(s.options).forEach(opt => {
+      if (opt.value && (taken[opt.value] || 0) > (s.value === opt.value ? 1 : 0)) {
+        opt.disabled = true;
+      }
+    });
+  });
+});
+
 async function loadAsignacionForm() {
   try {
     const chipSnap = await db.collection('chips').where('estado', '==', 'disponible').get();
     const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     chips.sort((a, b) => (a.numero_sim || '').localeCompare(b.numero_sim || ''));
-    const chipSelect = document.getElementById('asig-chip');
-    chipSelect.innerHTML = '<option value="">Seleccionar...</option>' +
-      chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
+    const chipOpts = chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;
+
+    // Populate all chip selects (preserves current values)
+    const allSelects = document.querySelectorAll('.asig-chip-select');
+    allSelects.forEach(sel => {
+      const currentVal = sel.value;
+      sel.innerHTML = '<option value="">Seleccionar...</option>' + chipOpts;
+      if (currentVal) sel.value = currentVal;
+    });
+
+    // Reset employee form and acta upload
     resetAsignacionEmpleadoForm();
+
     // Reset acta upload
     document.getElementById('acta-file').value = '';
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
-    // Chip change -> check if already assigned
-    chipSelect.addEventListener('change', async function() {
-      const warn = document.getElementById('asig-chip-warning');
-      warn.style.display = 'none';
-      if (!this.value) return;
-      try {
-        const snap = await db.collection('asignaciones')
-          .where('chip_id', '==', this.value)
-          .where('fecha_devolucion', '==', null)
-          .limit(1).get();
-        if (!snap.empty) {
-          const a = snap.docs[0].data();
-          warn.textContent = `⚠️ Este chip ya fue asignado a ${escapeHtml(a.empleado_nombre || 'otro empleado')}`;
-          warn.style.display = 'block';
-        }
-      } catch (e) { /* ignore */ }
-    });
+
   } catch (err) {
     showToast('Error al cargar formulario', 'error');
   }
@@ -750,22 +787,32 @@ function seleccionarEmpleadoSugerido(el) {
 }
 
 async function asignarChip() {
-  const chip_id = document.getElementById('asig-chip').value;
-  const celular = document.getElementById('asig-celular').checked;
-  const modelo = document.getElementById('asig-modelo').value.trim();
+  const rows = document.querySelectorAll('.asig-chip-row');
+  const chipsData = [];
+  for (const row of rows) {
+    const chip_id = row.querySelector('.asig-chip-select').value;
+    if (!chip_id) continue;
+    const chip_numero = row.querySelector('.asig-chip-select').selectedOptions[0]?.textContent || '';
+    const celular_asignado = row.querySelector('.asig-chip-celular').checked;
+    const modelo_celular = row.querySelector('.asig-chip-modelo').value.trim();
+    chipsData.push({ chip_id, chip_numero, celular_asignado, modelo_celular });
+    chip_ids.push(chip_id);
+  }
+  if (chipsData.length === 0) { showToast('Seleccioná al menos un chip', 'error'); return; }
   const observaciones = document.getElementById('asig-observaciones').value.trim();
   const actaFile = document.getElementById('acta-file').files[0];
-  if (!chip_id) { showToast('Seleccioná un chip', 'error'); return; }
 
-  // Double-check chip is not already assigned
-  const existingAsig = await db.collection('asignaciones')
-    .where('chip_id', '==', chip_id)
-    .where('fecha_devolucion', '==', null)
-    .limit(1).get();
-  if (!existingAsig.empty) {
-    const who = existingAsig.docs[0].data().empleado_nombre || 'otro empleado';
-    showToast(`El chip ya está asignado a ${who}`, 'error');
-    return;
+  // Check duplicates on active asignaciones
+  for (const c of chipsData) {
+    const existingAsig = await db.collection('asignaciones')
+      .where('chip_id', '==', c.chip_id)
+      .where('fecha_devolucion', '==', null)
+      .limit(1).get();
+    if (!existingAsig.empty) {
+      const who = existingAsig.docs[0].data().empleado_nombre || 'otro empleado';
+      showToast(`El chip ${c.chip_numero} ya está asignado a ${who}`, 'error');
+      return;
+    }
   }
 
   // Resolve empleado
@@ -779,7 +826,6 @@ async function asignarChip() {
 
   try {
     if (!empleado_id) {
-      // Create new employee
       const empData = {
         nombre: empNombre,
         dni: document.getElementById('asig-dni').value.trim(),
@@ -793,22 +839,21 @@ async function asignarChip() {
       empleado_id = empRef.id;
     }
 
-    const [empDoc, chipDoc] = await Promise.all([
-      db.collection('empleados').doc(empleado_id).get(),
-      db.collection('chips').doc(chip_id).get()
+    const [empDoc] = await Promise.all([
+      db.collection('empleados').doc(empleado_id).get()
     ]);
-    if (!empDoc.exists || !chipDoc.exists) { showToast('Empleado o chip no encontrado', 'error'); btn.disabled = false; btn.textContent = '✓ Asignar Chip'; return; }
+    if (!empDoc.exists) { showToast('Empleado no encontrado', 'error'); btn.disabled = false; btn.textContent = '✓ Asignar Chip'; return; }
     const empData = empDoc.data();
-    const chipData = chipDoc.data();
 
     const asigRef = await db.collection('asignaciones').add({
-      chip_id,
-      chip_numero: chipData.numero_sim,
+      chips: chipsData,
+      chip_id: chipsData[0].chip_id,
+      chip_numero: chipsData[0].chip_numero,
       empleado_id,
       empleado_nombre: empData.nombre,
       empleado_sector: empData.sector || '',
-      celular_asignado: celular,
-      modelo_celular: modelo,
+      celular_asignado: chipsData[0].celular_asignado,
+      modelo_celular: chipsData[0].modelo_celular,
       control_parental: document.getElementById('asig-control-parental').checked,
       cp_email: document.getElementById('asig-cp-email').value.trim(),
       cp_pass: document.getElementById('asig-cp-pass').value.trim(),
@@ -828,24 +873,18 @@ async function asignarChip() {
       await asigRef.update({ acta_url, acta_path: actaPath });
     }
 
-    await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
+    // Mark all chips as assigned
+    for (const c of chipsData) {
+      await db.collection('chips').doc(c.chip_id).update({ estado: 'asignado' });
+    }
     const cpChecked = document.getElementById('asig-control-parental').checked;
     const cpEmail = document.getElementById('asig-cp-email').value.trim();
     const cpPass = document.getElementById('asig-cp-pass').value.trim();
-    enviarEmailAsignacion(empData, chipData, { celular, modelo, control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass });
-    showToast('Chip asignado correctamente');
-    document.getElementById('asig-chip').value = '';
-    document.getElementById('asig-celular').checked = false;
-    document.getElementById('asig-modelo').value = '';
-    document.getElementById('asig-control-parental').checked = false;
-    document.getElementById('asig-cp-fields').style.display = 'none';
-    document.getElementById('asig-cp-email').value = '';
-    document.getElementById('asig-cp-pass').value = '';
-    document.getElementById('asig-observaciones').value = '';
-    document.getElementById('acta-file').value = '';
-    document.getElementById('acta-preview').style.display = 'none';
-    document.getElementById('acta-placeholder').style.display = '';
-    resetAsignacionEmpleadoForm();
+    enviarEmailAsignacion(empData, chipsData, {
+      control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass
+    });
+    showToast('Chip(es) asignado(s) correctamente');
+    resetAsignacionForm();
     loadAsignaciones();
   } catch (err) {
     const msg = err.message.toLowerCase();
@@ -859,6 +898,29 @@ async function asignarChip() {
   btn.textContent = '✓ Asignar Chip';
 }
 
+function resetAsignacionForm() {
+  // Remove all chip rows except the first one
+  const container = document.getElementById('asig-chips-rows');
+  const rows = container.querySelectorAll('.asig-chip-row');
+  for (let i = 1; i < rows.length; i++) rows[i].remove();
+  // Reset first row
+  const firstRow = container.querySelector('.asig-chip-row');
+  if (firstRow) {
+    firstRow.querySelector('.asig-chip-select').value = '';
+    firstRow.querySelector('.asig-chip-celular').checked = false;
+    firstRow.querySelector('.asig-chip-modelo').value = '';
+  }
+  document.getElementById('asig-control-parental').checked = false;
+  document.getElementById('asig-cp-fields').style.display = 'none';
+  document.getElementById('asig-cp-email').value = '';
+  document.getElementById('asig-cp-pass').value = '';
+  document.getElementById('asig-observaciones').value = '';
+  document.getElementById('acta-file').value = '';
+  document.getElementById('acta-preview').style.display = 'none';
+  document.getElementById('acta-placeholder').style.display = '';
+  resetAsignacionEmpleadoForm();
+}
+
 async function loadAsignacionHistorial() {
   const tbody = document.getElementById('historial-tbody');
   tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando...</td></tr>';
@@ -869,19 +931,26 @@ async function loadAsignacionHistorial() {
       return;
     }
     tbody.innerHTML = data.map(a => {
+      const chips = a.chips || (a.chip_id ? [{ chip_id: a.chip_id, chip_numero: a.chip_numero, celular_asignado: a.celular_asignado, modelo_celular: a.modelo_celular }] : []);
+      const chipsHtml = chips.length > 1
+        ? `<details style="font-size:13px"><summary><strong>${chips.length} chips</strong></summary><div style="margin-top:4px">${chips.map(c => `<div>📱 ${escapeHtml(c.chip_numero)}${c.celular_asignado ? ' ✅' : ''}${c.modelo_celular ? ' (' + escapeHtml(c.modelo_celular) + ')' : ''}</div>`).join('')}</div></details>`
+        : (chips[0] ? `<strong>${escapeHtml(chips[0].chip_numero || '—')}</strong>` : '—');
       const actaBtn = a.acta_url
         ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver acta</button>`
         : '—';
       const cpInfo = a.control_parental
         ? `<span class="badge badge-info" title="CP: ${escapeHtml(a.cp_email || '')}">🔒 ${escapeHtml(a.cp_email || 'Sí')}</span>`
         : '—';
+      const celularInfo = chips.filter(c => c.celular_asignado).length > 0
+        ? chips.filter(c => c.celular_asignado).map(c => `✅ ${c.modelo_celular ? `(${escapeHtml(c.modelo_celular)})` : 'Sí'}`).join('<br>')
+        : '❌ No';
       return `<tr>
         <td>${escapeHtml(a.empleado_nombre || '—')}</td>
         <td>${a.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(a.empleado_sector) + '</span>' : '—'}</td>
-        <td><strong>${escapeHtml(a.chip_numero || '—')}</strong></td>
+        <td>${chipsHtml}</td>
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
-        <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
+        <td>${celularInfo}</td>
         <td>${cpInfo}</td>
         <td>${actaBtn}</td>
         <td>
@@ -900,11 +969,17 @@ async function loadAsignacionHistorial() {
 async function devolverChip(asigId, chipId) {
   if (!confirm('¿Confirmás la devolución de este chip?')) return;
   try {
+    const asigDoc = await db.collection('asignaciones').doc(asigId).get();
+    const data = asigDoc.data();
     await db.collection('asignaciones').doc(asigId).update({
       fecha_devolucion: new Date().toISOString().split('T')[0]
     });
-    await db.collection('chips').doc(chipId).update({ estado: 'disponible' });
-    showToast('Chip devuelto correctamente');
+    // Free all chips from the chips array, or fallback to chip_id
+    const chips = data.chips || [{ chip_id: chipId }];
+    for (const c of chips) {
+      try { await db.collection('chips').doc(c.chip_id).update({ estado: 'disponible' }); } catch (e) {}
+    }
+    showToast('Chip(es) devuelto(s) correctamente');
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
@@ -912,12 +987,17 @@ async function devolverChip(asigId, chipId) {
 async function deleteAsignacion(id) {
   if (!confirm('¿Eliminar esta asignación del historial?')) return;
   try {
-    // Delete acta from Storage using stored path
     const doc = await db.collection('asignaciones').doc(id).get();
     if (doc.exists) {
-      const actaPath = doc.data().acta_path;
+      const d = doc.data();
+      const actaPath = d.acta_path;
       if (actaPath) {
         try { await storage.ref(actaPath).delete(); } catch (e) { /* already gone */ }
+      }
+      // Free all chips
+      const chips = d.chips || [{ chip_id: d.chip_id }];
+      for (const c of chips) {
+        try { await db.collection('chips').doc(c.chip_id).update({ estado: 'disponible' }); } catch (e) {}
       }
     }
     await db.collection('asignaciones').doc(id).delete();

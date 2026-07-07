@@ -210,20 +210,29 @@
               <button type="button" class="btn btn-sm btn-secondary" id="btn-cambiar-empleado" style="margin-left:8px">Cambiar</button>
             </div>
           </div>
-          <div class="form-group">
-            <label>Chip SIM</label>
-            <select id="asig-chip"><option value="">Cargando...</option></select>
-            <p id="asig-chip-warning" style="display:none;margin-top:4px;font-size:12px;color:#dc2626"></p>
-          </div>
-          <div class="form-group">
-            <div class="form-check">
-              <input type="checkbox" id="asig-celular">
-              <label for="asig-celular">Incluye celular</label>
+          <div class="full-width" id="asig-chips-container" style="border:1px solid var(--border);border-radius:8px;padding:16px;background:#fafafa">
+            <h4 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)">📱 Chips a asignar</h4>
+            <div id="asig-chips-rows">
+              <div class="asig-chip-row" style="display:grid;grid-template-columns:1fr auto 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:12px">Chip SIM</label>
+                  <select class="asig-chip-select" style="width:100%"><option value="">Seleccionar...</option></select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <div class="form-check" style="margin:0">
+                    <input type="checkbox" class="asig-chip-celular">
+                    <label style="font-size:12px">📱</label>
+                  </div>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:12px">Modelo</label>
+                  <input type="text" class="asig-chip-modelo" placeholder="Modelo" style="width:100%">
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary btn-remove-chip" style="margin-bottom:2px;white-space:nowrap" title="Quitar chip">✕</button>
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label>Modelo del celular</label>
-            <input type="text" id="asig-modelo" placeholder="Ej: Moto G54">
+            <button type="button" class="btn btn-sm btn-outline" id="btn-add-chip" style="font-size:13px">+ Agregar otro chip</button>
+            <p id="asig-chip-warning" style="display:none;margin-top:8px;font-size:12px;color:#dc2626;margin-bottom:0"></p>
           </div>
           <div class="full-width" style="border:1px solid var(--border);border-radius:8px;padding:16px;background:#fafafa">
             <div class="form-check" style="margin-bottom:8px">
@@ -241,6 +250,7 @@
               </div>
             </div>
           </div>
+
           <div class="form-group full-width">
             <label>Acta firmada</label>
             <div class="acta-upload" id="acta-upload-area">

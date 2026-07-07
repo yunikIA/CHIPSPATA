@@ -182,6 +182,23 @@ function setupNavigation() {
     document.getElementById('acta-placeholder').style.display = '';
   });
 
+  // Employee search in asignacion form
+  let searchTimeout;
+  document.getElementById('asig-nombre').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    if (document.getElementById('asig-empleado-id').value) return;
+    const val = this.value.trim();
+    searchTimeout = setTimeout(() => buscarEmpleados(val), 300);
+  });
+  document.getElementById('asig-empleado-suggest').addEventListener('click', function(e) {
+    const item = e.target.closest('.suggest-item');
+    if (item) seleccionarEmpleadoSugerido(item);
+  });
+  document.getElementById('btn-cambiar-empleado').addEventListener('click', function() {
+    resetAsignacionEmpleadoForm();
+    document.getElementById('asig-nombre').focus();
+  });
+
   // Event delegation for historial buttons
   document.getElementById('historial-tbody').addEventListener('click', function(e) {
     const verBtn = e.target.closest('.ver-acta-btn');
@@ -190,6 +207,13 @@ function setupNavigation() {
     if (devBtn) { devolverChip(devBtn.dataset.asig, devBtn.dataset.chip); return; }
     const delBtn = e.target.closest('.delete-asig-btn');
     if (delBtn) { deleteAsignacion(delBtn.dataset.id); return; }
+  });
+
+  // Close suggest on outside click
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#asig-nombre') && !e.target.closest('#asig-empleado-suggest')) {
+      document.getElementById('asig-empleado-suggest').style.display = 'none';
+    }
   });
 }
 
@@ -578,58 +602,123 @@ async function llenarSelectSectores(selectId, selected, emptyLabel) {
 async function loadAsignaciones() {
   await loadAsignacionForm();
   await loadAsignacionHistorial();
+  await llenarSelectSectores('asig-sector');
 }
 
 async function loadAsignacionForm() {
   try {
-    const [empSnap, chipSnap] = await Promise.all([
-      db.collection('empleados').orderBy('nombre').get(),
-      db.collection('chips').where('estado', '==', 'disponible').get()
-    ]);
-    const empleados = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const chipSnap = await db.collection('chips').where('estado', '==', 'disponible').get();
     const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     chips.sort((a, b) => (a.numero_sim || '').localeCompare(b.numero_sim || ''));
-    const empSelect = document.getElementById('asig-empleado');
     const chipSelect = document.getElementById('asig-chip');
-    empSelect.innerHTML = '<option value="">Seleccionar...</option>' +
-      empleados.map(e => `<option value="${e.id}" data-sector="${escapeHtml(e.sector || '')}">${escapeHtml(e.nombre)}</option>`).join('');
     chipSelect.innerHTML = '<option value="">Seleccionar...</option>' +
       chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;
+    resetAsignacionEmpleadoForm();
     // Reset acta upload
     document.getElementById('acta-file').value = '';
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
-    empSelect.addEventListener('change', () => {
-      const opt = empSelect.options[empSelect.selectedIndex];
-      const sector = opt ? opt.dataset.sector : '';
-      const info = document.getElementById('asig-sector-info');
-      if (sector) {
-        info.textContent = '🏢 ' + sector;
-        info.style.display = 'block';
-      } else {
-        info.style.display = 'none';
-      }
-    });
   } catch (err) {
     showToast('Error al cargar formulario', 'error');
   }
 }
 
+function resetAsignacionEmpleadoForm() {
+  document.getElementById('asig-empleado-id').value = '';
+  document.getElementById('asig-nombre').value = '';
+  document.getElementById('asig-dni').value = '';
+  document.getElementById('asig-telefono').value = '';
+  document.getElementById('asig-email').value = '';
+  document.getElementById('asig-contraseña').value = '';
+  document.getElementById('asig-sector').value = '';
+  document.getElementById('asig-empleado-selected').style.display = 'none';
+  document.getElementById('asig-empleado-suggest').style.display = 'none';
+  document.getElementById('asig-empleado-suggest').innerHTML = '';
+  enableEmpleadoFields(true);
+}
+
+function enableEmpleadoFields(editable) {
+  ['asig-nombre', 'asig-dni', 'asig-telefono', 'asig-email', 'asig-contraseña'].forEach(id => document.getElementById(id).readOnly = !editable);
+  document.getElementById('asig-sector').disabled = !editable;
+}
+
+async function buscarEmpleados(query) {
+  if (!query || query.length < 2) {
+    document.getElementById('asig-empleado-suggest').style.display = 'none';
+    return;
+  }
+  try {
+    const snap = await db.collection('empleados')
+      .where('nombre', '>=', query)
+      .where('nombre', '<=', query + '\uf8ff')
+      .orderBy('nombre')
+      .limit(8)
+      .get();
+    const suggest = document.getElementById('asig-empleado-suggest');
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (items.length === 0) {
+      suggest.style.display = 'none';
+      return;
+    }
+    suggest.innerHTML = items.map(e =>
+      `<div class="suggest-item" data-id="${e.id}" data-nombre="${escapeHtml(e.nombre)}" data-telefono="${escapeHtml(e.telefono || '')}" data-email="${escapeHtml(e.email || '')}" data-contraseña="${escapeHtml(e.contraseña || '')}" data-sector="${escapeHtml(e.sector || '')}">
+        <strong>${escapeHtml(e.nombre)}</strong>
+        ${e.sector ? '<span style="font-size:11px;color:var(--text-muted)"> — ' + escapeHtml(e.sector) + '</span>' : ''}
+      </div>`
+    ).join('');
+    suggest.style.display = 'block';
+  } catch (e) {
+    // ignore search errors
+  }
+}
+
+function seleccionarEmpleadoSugerido(el) {
+  document.getElementById('asig-empleado-id').value = el.dataset.id;
+  document.getElementById('asig-nombre').value = el.dataset.nombre;
+  document.getElementById('asig-telefono').value = el.dataset.telefono;
+  document.getElementById('asig-email').value = el.dataset.email;
+  document.getElementById('asig-contraseña').value = el.dataset.contraseña;
+  document.getElementById('asig-sector').value = el.dataset.sector;
+  document.getElementById('asig-empleado-suggest').style.display = 'none';
+  document.getElementById('asig-empleado-selected-nombre').textContent = el.dataset.nombre;
+  document.getElementById('asig-empleado-selected').style.display = 'block';
+  enableEmpleadoFields(false);
+}
+
 async function asignarChip() {
-  const empleado_id = document.getElementById('asig-empleado').value;
   const chip_id = document.getElementById('asig-chip').value;
   const celular = document.getElementById('asig-celular').checked;
   const modelo = document.getElementById('asig-modelo').value.trim();
   const observaciones = document.getElementById('asig-observaciones').value.trim();
   const actaFile = document.getElementById('acta-file').files[0];
-  if (!empleado_id || !chip_id) { showToast('Seleccioná empleado y chip', 'error'); return; }
+  if (!chip_id) { showToast('Seleccioná un chip', 'error'); return; }
+
+  // Resolve empleado
+  let empleado_id = document.getElementById('asig-empleado-id').value;
+  const empNombre = document.getElementById('asig-nombre').value.trim();
+  if (!empNombre) { showToast('Ingresá el nombre del empleado', 'error'); return; }
 
   const btn = document.getElementById('btn-asignar');
   btn.disabled = true;
   btn.textContent = 'Asignando...';
 
   try {
+    if (!empleado_id) {
+      // Create new employee
+      const empData = {
+        nombre: empNombre,
+        dni: document.getElementById('asig-dni').value.trim(),
+        telefono: document.getElementById('asig-telefono').value.trim(),
+        email: document.getElementById('asig-email').value.trim(),
+        contraseña: document.getElementById('asig-contraseña').value.trim(),
+        sector: document.getElementById('asig-sector').value,
+        createdAt: new Date().toISOString()
+      };
+      const empRef = await db.collection('empleados').add(empData);
+      empleado_id = empRef.id;
+    }
+
     const [empDoc, chipDoc] = await Promise.all([
       db.collection('empleados').doc(empleado_id).get(),
       db.collection('chips').doc(chip_id).get()
@@ -665,7 +754,6 @@ async function asignarChip() {
     await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
     enviarEmailAsignacion(empData, chipData, { celular, modelo });
     showToast('Chip asignado correctamente');
-    document.getElementById('asig-empleado').value = '';
     document.getElementById('asig-chip').value = '';
     document.getElementById('asig-celular').checked = false;
     document.getElementById('asig-modelo').value = '';
@@ -673,6 +761,7 @@ async function asignarChip() {
     document.getElementById('acta-file').value = '';
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
+    resetAsignacionEmpleadoForm();
     loadAsignaciones();
   } catch (err) {
     const msg = err.message.toLowerCase();

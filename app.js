@@ -233,8 +233,6 @@ function setupNavigation() {
     if (devBtn) { devolverChip(devBtn.dataset.asig, devBtn.dataset.chip); return; }
     const delBtn = e.target.closest('.delete-asig-btn');
     if (delBtn) { deleteAsignacion(delBtn.dataset.id); return; }
-    const todoBtn = e.target.closest('.devolver-todo-btn');
-    if (todoBtn) { devolverTodo(todoBtn.dataset.batch); return; }
   });
 
   // Close suggest on outside click
@@ -849,7 +847,6 @@ async function asignarChip() {
     const cpPass = document.getElementById('asig-cp-pass').value.trim();
     const fecha = new Date().toISOString().split('T')[0];
     const timestamp = new Date().toISOString();
-    const batch_id = chipsData.length > 1 ? `${timestamp}_${empleado_id}` : '';
 
     let firstAsigId = null;
 
@@ -858,7 +855,6 @@ async function asignarChip() {
       const asigRef = await db.collection('asignaciones').add({
         chip_id: chip.chip_id,
         chip_numero: chip.chip_numero,
-        batch_id,
         empleado_id,
         empleado_nombre: empData.nombre,
         empleado_sector: empData.sector || '',
@@ -933,79 +929,29 @@ async function loadAsignacionHistorial() {
       tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
       return;
     }
-
-    // Group by batch_id
-    const groups = {};
-    data.forEach(a => {
-      const key = a.batch_id || a.id;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(a);
-    });
-
-    tbody.innerHTML = Object.values(groups).map(group => {
-      const first = group[0];
-      if (group.length === 1) {
-        const actaBtn = first.acta_url
-          ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(first.acta_url)}">📄 Ver acta</button>`
-          : '—';
-        const cpInfo = first.control_parental
-          ? `<span class="badge badge-info" title="CP: ${escapeHtml(first.cp_email || '')}">🔒 ${escapeHtml(first.cp_email || 'Sí')}</span>`
-          : '—';
-        return `<tr>
-          <td>${escapeHtml(first.empleado_nombre || '—')}</td>
-          <td>${first.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(first.empleado_sector) + '</span>' : '—'}</td>
-          <td><strong>${escapeHtml(first.chip_numero || '—')}</strong></td>
-          <td>${formatDate(first.fecha_asignacion)}</td>
-          <td>${first.fecha_devolucion ? formatDate(first.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
-          <td>${first.celular_asignado ? '✅ Sí' + (first.modelo_celular ? ' (' + escapeHtml(first.modelo_celular) + ')' : '') : '❌ No'}</td>
-          <td>${cpInfo}</td>
-          <td>${actaBtn}</td>
-          <td>
-            <div class="table-actions">
-              ${!first.fecha_devolucion ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${first.id}" data-chip="${first.chip_id}">↩ Devolver</button>` : ''}
-              <button class="btn-icon delete-asig-btn" data-id="${first.id}" title="Eliminar">🗑️</button>
-            </div>
-          </td>
-        </tr>`;
-      } else {
-        const allReturned = group.every(c => c.fecha_devolucion);
-        const activeCount = group.filter(c => !c.fecha_devolucion).length;
-        const chipsList = group.map(c => {
-          const returned = c.fecha_devolucion ? '✅ Devuelto ' + formatDate(c.fecha_devolucion) : '🔴 Activo';
-          const returnBtn = !c.fecha_devolucion
-            ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${c.id}" data-chip="${c.chip_id}" style="font-size:11px;padding:2px 6px;margin-left:6px">↩</button>`
-            : '';
-          return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0">
-            📱 ${escapeHtml(c.chip_numero)}${c.celular_asignado ? ' ✅' : ''}${c.modelo_celular ? ' (' + escapeHtml(c.modelo_celular) + ')' : ''}
-            <span style="font-size:11px;color:${returned ? 'var(--success)' : 'var(--warning)'}">${returned}</span>${returnBtn}
-            <button class="btn-icon delete-asig-btn" data-id="${c.id}" style="font-size:11px;padding:2px 4px" title="Eliminar">🗑️</button>
-          </div>`;
-        }).join('');
-        const statusBadge = allReturned
-          ? '<span class="badge badge-success">Devuelto</span>'
-          : `<span class="badge badge-warning">${activeCount} activo(s)</span>`;
-        const actaBtn = first.acta_url
-          ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(first.acta_url)}">📄 Ver acta</button>`
-          : '—';
-        const cpInfo = first.control_parental
-          ? `<span class="badge badge-info" title="CP: ${escapeHtml(first.cp_email || '')}">🔒 ${escapeHtml(first.cp_email || 'Sí')}</span>`
-          : '—';
-        // "Devolver Todo" button: finds first active and returns it (use loops for all active)
-        const devolverTodoBtn = activeCount > 0
-          ? `<button class="btn btn-sm btn-warning devolver-todo-btn" data-batch="${first.batch_id}" style="font-size:11px;padding:2px 6px">↩ Todo</button>`
-          : '';
-        return `<tr>
-          <td>${escapeHtml(first.empleado_nombre || '—')}</td>
-          <td>${first.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(first.empleado_sector) + '</span>' : '—'}</td>
-          <td><details style="font-size:13px"><summary><strong>${chipsList.length} chips</strong></summary><div style="margin-top:4px">${chipsList}</div></details></td>
-          <td>${formatDate(first.fecha_asignacion)}</td>
-          <td>${statusBadge}</td>
-          <td>${group.some(c => c.celular_asignado) ? '✅ Sí' : '❌ No'}</td>
-          <td>${cpInfo}</td>
-          <td>${actaBtn}</td>
-          <td><div class="table-actions">${devolverTodoBtn}</div></td>
-        </tr>`;
-      }
+    tbody.innerHTML = data.map(a => {
+      const actaBtn = a.acta_url
+        ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver acta</button>`
+        : '—';
+      const cpInfo = a.control_parental
+        ? `<span class="badge badge-info" title="CP: ${escapeHtml(a.cp_email || '')}">🔒 ${escapeHtml(a.cp_email || 'Sí')}</span>`
+        : '—';
+      return `<tr>
+        <td>${escapeHtml(a.empleado_nombre || '—')}</td>
+        <td>${a.empleado_sector ? '<span class="badge badge-info">' + escapeHtml(a.empleado_sector) + '</span>' : '—'}</td>
+        <td><strong>${escapeHtml(a.chip_numero || '—')}</strong></td>
+        <td>${formatDate(a.fecha_asignacion)}</td>
+        <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
+        <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
+        <td>${cpInfo}</td>
+        <td>${actaBtn}</td>
+        <td>
+          <div class="table-actions">
+            ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${a.id}" data-chip="${a.chip_id}">↩ Devolver</button>` : ''}
+            <button class="btn-icon delete-asig-btn" data-id="${a.id}" title="Eliminar">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
     }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
@@ -1020,24 +966,6 @@ async function devolverChip(asigId, chipId) {
     });
     await db.collection('chips').doc(chipId).update({ estado: 'disponible' });
     showToast('Chip devuelto correctamente');
-    loadAsignaciones();
-  } catch (err) { showToast('Error: ' + err.message, 'error'); }
-}
-
-async function devolverTodo(batchId) {
-  if (!confirm('¿Devolver todos los chips activos de este lote?')) return;
-  try {
-    const snap = await db.collection('asignaciones')
-      .where('batch_id', '==', batchId)
-      .where('fecha_devolucion', '==', null)
-      .get();
-    const fecha = new Date().toISOString().split('T')[0];
-    const updates = snap.docs.map(doc =>
-      doc.ref.update({ fecha_devolucion: fecha })
-        .then(() => db.collection('chips').doc(doc.data().chip_id).update({ estado: 'disponible' }))
-    );
-    await Promise.all(updates);
-    showToast(`${snap.size} chip(es) devuelto(s)`);
     loadAsignaciones();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }

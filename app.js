@@ -677,29 +677,31 @@ function addChipRow() {
   container.appendChild(newRow);
 }
 
-// Mutex for chip selects via event delegation
+// Mutex for chip selects via event delegation — remove taken chips from other selects
 document.getElementById('asig-chips-rows').addEventListener('change', function(e) {
   const sel = e.target.closest('.asig-chip-select');
   if (!sel) return;
   const selects = this.querySelectorAll('.asig-chip-select');
-  // Enable all options everywhere
-  selects.forEach(s => Array.from(s.options).forEach(opt => opt.disabled = false));
-  // Disable options selected in another row
-  const taken = {};
-  selects.forEach(s => { if (s.value) taken[s.value] = (taken[s.value] || 0) + 1; });
+  // Collect taken values (excluding the current select's own value)
+  const taken = [];
+  selects.forEach(s => { if (s !== sel && s.value) taken.push(s.value); });
+  // Rebuild each select removing taken chips
   selects.forEach(s => {
-    Array.from(s.options).forEach(opt => {
-      if (opt.value && (taken[opt.value] || 0) > (s.value === opt.value ? 1 : 0)) {
-        opt.disabled = true;
-      }
+    const currentVal = s.value;
+    // Keep only options not in taken (or the currently selected one)
+    const options = Array.from(s.options).filter(opt => {
+      return !opt.value || opt.value === currentVal || !taken.includes(opt.value);
     });
+    s.innerHTML = options.map(opt => opt.outerHTML).join('');
+    if (currentVal) s.value = currentVal;
   });
 });
 
 async function loadAsignacionForm() {
   try {
     const chipSnap = await db.collection('chips').where('estado', '==', 'disponible').get();
-    const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => c.estado === 'disponible');
     chips.sort((a, b) => (a.numero_sim || '').localeCompare(b.numero_sim || ''));
     const chipOpts = chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;

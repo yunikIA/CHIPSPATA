@@ -75,6 +75,9 @@ async function enviarEmailAsignacion(empleado, chip, asigData) {
       telefono: empleado.telefono || '',
       celular: asigData.celular ? 'Sí' : 'No',
       modelo_celular: asigData.modelo || '',
+      control_parental: asigData.control_parental ? 'Sí' : 'No',
+      cp_email: asigData.cp_email || '',
+      cp_pass: asigData.cp_pass || '',
       fecha: new Date().toLocaleDateString('es-AR'),
       sector: empleado.sector || ''
     });
@@ -197,6 +200,18 @@ function setupNavigation() {
   document.getElementById('btn-cambiar-empleado').addEventListener('click', function() {
     resetAsignacionEmpleadoForm();
     document.getElementById('asig-nombre').focus();
+  });
+
+  // Control parental toggle
+  document.getElementById('asig-control-parental').addEventListener('change', function() {
+    const fields = document.getElementById('asig-cp-fields');
+    if (this.checked) {
+      fields.style.display = 'grid';
+    } else {
+      fields.style.display = 'none';
+      document.getElementById('asig-cp-email').value = '';
+      document.getElementById('asig-cp-pass').value = '';
+    }
   });
 
   // Event delegation for historial buttons
@@ -600,9 +615,11 @@ async function llenarSelectSectores(selectId, selected, emptyLabel) {
 // ========== ASIGNACIONES ==========
 
 async function loadAsignaciones() {
-  await loadAsignacionForm();
-  await loadAsignacionHistorial();
-  await llenarSelectSectores('asig-sector');
+  await Promise.all([
+    loadAsignacionForm(),
+    loadAsignacionHistorial(),
+    llenarSelectSectores('asig-sector')
+  ]);
 }
 
 async function loadAsignacionForm() {
@@ -735,6 +752,9 @@ async function asignarChip() {
       empleado_sector: empData.sector || '',
       celular_asignado: celular,
       modelo_celular: modelo,
+      control_parental: document.getElementById('asig-control-parental').checked,
+      cp_email: document.getElementById('asig-cp-email').value.trim(),
+      cp_pass: document.getElementById('asig-cp-pass').value.trim(),
       observaciones,
       fecha_asignacion: new Date().toISOString().split('T')[0],
       fecha_devolucion: null,
@@ -752,11 +772,18 @@ async function asignarChip() {
     }
 
     await db.collection('chips').doc(chip_id).update({ estado: 'asignado' });
-    enviarEmailAsignacion(empData, chipData, { celular, modelo });
+    const cpChecked = document.getElementById('asig-control-parental').checked;
+    const cpEmail = document.getElementById('asig-cp-email').value.trim();
+    const cpPass = document.getElementById('asig-cp-pass').value.trim();
+    enviarEmailAsignacion(empData, chipData, { celular, modelo, control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass });
     showToast('Chip asignado correctamente');
     document.getElementById('asig-chip').value = '';
     document.getElementById('asig-celular').checked = false;
     document.getElementById('asig-modelo').value = '';
+    document.getElementById('asig-control-parental').checked = false;
+    document.getElementById('asig-cp-fields').style.display = 'none';
+    document.getElementById('asig-cp-email').value = '';
+    document.getElementById('asig-cp-pass').value = '';
     document.getElementById('asig-observaciones').value = '';
     document.getElementById('acta-file').value = '';
     document.getElementById('acta-preview').style.display = 'none';
@@ -777,16 +804,19 @@ async function asignarChip() {
 
 async function loadAsignacionHistorial() {
   const tbody = document.getElementById('historial-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando...</td></tr>';
   try {
     const data = await getAsignaciones();
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📄</div><p>No hay asignaciones aún</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(a => {
       const actaBtn = a.acta_url
         ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver acta</button>`
+        : '—';
+      const cpInfo = a.control_parental
+        ? `<span class="badge badge-info" title="CP: ${escapeHtml(a.cp_email || '')}">🔒 ${escapeHtml(a.cp_email || 'Sí')}</span>`
         : '—';
       return `<tr>
         <td>${escapeHtml(a.empleado_nombre || '—')}</td>
@@ -795,6 +825,7 @@ async function loadAsignacionHistorial() {
         <td>${formatDate(a.fecha_asignacion)}</td>
         <td>${a.fecha_devolucion ? formatDate(a.fecha_devolucion) : '<span class="badge badge-warning">Activo</span>'}</td>
         <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
+        <td>${cpInfo}</td>
         <td>${actaBtn}</td>
         <td>
           <div class="table-actions">
@@ -805,7 +836,7 @@ async function loadAsignacionHistorial() {
       </tr>`;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
   }
 }
 

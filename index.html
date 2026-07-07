@@ -224,6 +224,22 @@
             <label>Modelo del celular</label>
             <input type="text" id="asig-modelo" placeholder="Ej: Moto G54">
           </div>
+          <div class="full-width" style="border:1px solid var(--border);border-radius:8px;padding:16px;background:#fafafa">
+            <div class="form-check" style="margin-bottom:8px">
+              <input type="checkbox" id="asig-control-parental">
+              <label for="asig-control-parental">🔒 Tiene control parental</label>
+            </div>
+            <div id="asig-cp-fields" style="display:none;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label>Correo del control parental</label>
+                <input type="email" id="asig-cp-email" placeholder="correo@controlparental.com">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Contraseña del control parental</label>
+                <input type="text" id="asig-cp-pass" placeholder="Contraseña">
+              </div>
+            </div>
+          </div>
           <div class="form-group full-width">
             <label>Acta firmada</label>
             <div class="acta-upload" id="acta-upload-area">
@@ -263,12 +279,13 @@
                 <th>Asignación</th>
                 <th>Devolución</th>
                 <th>Celular</th>
+                <th>Control parental</th>
                 <th>Acta</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="historial-tbody">
-              <tr><td colspan="8" class="loading">Cargando...</td></tr>
+              <tr><td colspan="9" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>

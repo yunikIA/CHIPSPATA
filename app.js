@@ -697,9 +697,18 @@ document.getElementById('asig-chips-rows').addEventListener('change', function(e
 
 async function loadAsignacionForm() {
   try {
-    const chipSnap = await db.collection('chips').where('estado', '==', 'disponible').get();
+    const [chipSnap, asigSnap] = await Promise.all([
+      db.collection('chips').get(),
+      db.collection('asignaciones').where('fecha_devolucion', '==', null).get()
+    ]);
+    const assignedIds = new Set(asigSnap.docs.map(d => d.data().chip_id));
+    // Also check chips array in older documents
+    asigSnap.docs.forEach(d => {
+      const data = d.data();
+      if (data.chips) data.chips.forEach(c => assignedIds.add(c.chip_id));
+    });
     const chips = chipSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      .filter(c => c.estado === 'disponible');
+      .filter(c => c.estado === 'disponible' && !assignedIds.has(c.id));
     chips.sort((a, b) => (a.numero_sim || '').localeCompare(b.numero_sim || ''));
     const chipOpts = chips.map(c => `<option value="${c.id}">${escapeHtml(c.numero_sim)}</option>`).join('');
     document.getElementById('asignar-disponibles').textContent = chips.length;

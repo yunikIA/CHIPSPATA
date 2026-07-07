@@ -438,7 +438,15 @@ async function saveChip() {
 
   try {
     if (id) {
-      // Edit existing single chip
+      // Edit existing single chip — check another chip doesn't have this number
+      const dup = await db.collection('chips')
+        .where('numero_sim', '==', numeros[0])
+        .limit(2).get();
+      const dups = dup.docs.filter(d => d.id !== id);
+      if (dups.length > 0) {
+        showToast(`El número ${numeros[0]} ya está registrado en otro chip`, 'error');
+        return;
+      }
       await db.collection('chips').doc(id).update({
         numero_sim: numeros[0],
         operador,
@@ -446,15 +454,36 @@ async function saveChip() {
       });
       showToast('Chip actualizado correctamente');
     } else {
-      // Bulk create
+      // Bulk create — check duplicates first
+      const existingNums = new Set();
+      // Firestore 'in' max 10 items, so chunk
+      for (let i = 0; i < numeros.length; i += 10) {
+        const chunk = numeros.slice(i, i + 10);
+        const snap = await db.collection('chips')
+          .where('numero_sim', 'in', chunk)
+          .get();
+        snap.docs.forEach(d => existingNums.add(d.data().numero_sim));
+      }
+      const duplicados = numeros.filter(n => existingNums.has(n));
+      const nuevos = numeros.filter(n => !existingNums.has(n));
+
+      if (duplicados.length > 0) {
+        showToast(`${duplicados.length} número(s) ya existen: ${duplicados.join(', ')}`, 'warning');
+      }
+
+      if (nuevos.length === 0) {
+        showToast('No hay números nuevos para registrar', 'error');
+        return;
+      }
+
       const batch = db.batch();
       const now = new Date().toISOString();
-      for (const num of numeros) {
+      for (const num of nuevos) {
         const ref = db.collection('chips').doc();
         batch.set(ref, { numero_sim: num, operador, estado, createdAt: now });
       }
       await batch.commit();
-      showToast(`${numeros.length} chip(s) registrado(s) correctamente`);
+      showToast(`${nuevos.length} chip(s) registrado(s) correctamente`);
     }
     closeModal(document.getElementById('chip-modal'));
     loadChips();

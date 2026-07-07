@@ -636,6 +636,23 @@ async function loadAsignacionForm() {
     document.getElementById('acta-file').value = '';
     document.getElementById('acta-preview').style.display = 'none';
     document.getElementById('acta-placeholder').style.display = '';
+    // Chip change -> check if already assigned
+    chipSelect.addEventListener('change', async function() {
+      const warn = document.getElementById('asig-chip-warning');
+      warn.style.display = 'none';
+      if (!this.value) return;
+      try {
+        const snap = await db.collection('asignaciones')
+          .where('chip_id', '==', this.value)
+          .where('fecha_devolucion', '==', null)
+          .limit(1).get();
+        if (!snap.empty) {
+          const a = snap.docs[0].data();
+          warn.textContent = `⚠️ Este chip ya fue asignado a ${escapeHtml(a.empleado_nombre || 'otro empleado')}`;
+          warn.style.display = 'block';
+        }
+      } catch (e) { /* ignore */ }
+    });
   } catch (err) {
     showToast('Error al cargar formulario', 'error');
   }
@@ -710,6 +727,17 @@ async function asignarChip() {
   const observaciones = document.getElementById('asig-observaciones').value.trim();
   const actaFile = document.getElementById('acta-file').files[0];
   if (!chip_id) { showToast('Seleccioná un chip', 'error'); return; }
+
+  // Double-check chip is not already assigned
+  const existingAsig = await db.collection('asignaciones')
+    .where('chip_id', '==', chip_id)
+    .where('fecha_devolucion', '==', null)
+    .limit(1).get();
+  if (!existingAsig.empty) {
+    const who = existingAsig.docs[0].data().empleado_nombre || 'otro empleado';
+    showToast(`El chip ya está asignado a ${who}`, 'error');
+    return;
+  }
 
   // Resolve empleado
   let empleado_id = document.getElementById('asig-empleado-id').value;

@@ -20,9 +20,9 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-input[type="text"],
-input[type="email"],
-input[type="search"] {
+input[type="text"]:not(.no-upper),
+input[type="email"]:not(.no-upper),
+input[type="search"]:not(.no-upper) {
   text-transform: uppercase;
 }
 

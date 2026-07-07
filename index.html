@@ -105,11 +105,12 @@
                 <th>Email</th>
                 <th>Sector</th>
                 <th>Observaciones</th>
+                <th>Control Parental</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="empleados-tbody">
-              <tr><td colspan="6" class="loading">Cargando...</td></tr>
+              <tr><td colspan="7" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -197,7 +198,7 @@
               </div>
               <div class="form-group" style="margin:0">
                 <label>Contraseña</label>
-                <input type="text" id="asig-contraseña" placeholder="Contraseña">
+                <input type="text" id="asig-contraseña" placeholder="Contraseña" class="no-upper">
               </div>
               <div class="form-group" style="margin:0">
                 <label>Sector</label>
@@ -246,7 +247,7 @@
               </div>
               <div class="form-group" style="margin:0">
                 <label>Contraseña del control parental</label>
-                <input type="text" id="asig-cp-pass" placeholder="Contraseña">
+                <input type="text" id="asig-cp-pass" placeholder="Contraseña" class="no-upper">
               </div>
             </div>
           </div>
@@ -404,7 +405,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Contraseña</label>
-          <input type="text" id="emp-contraseña" placeholder="Contraseña">
+          <input type="text" id="emp-contraseña" placeholder="Contraseña" class="no-upper">
         </div>
         <div class="form-group">
           <label>Sector</label>
@@ -414,6 +415,16 @@
       <div class="form-group">
         <label>Observaciones</label>
         <textarea id="emp-observaciones" placeholder="Notas adicionales..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Email Control Parental</label>
+          <input type="text" id="emp-cp-email" placeholder="correo@controlparental.com" class="no-upper">
+        </div>
+        <div class="form-group">
+          <label>Contraseña Control Parental</label>
+          <input type="text" id="emp-cp-pass" placeholder="Contraseña" class="no-upper">
+        </div>
       </div>
     </div>
     <div class="modal-footer">

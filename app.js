@@ -89,16 +89,23 @@ async function enviarEmailAsignacion(empleado, chipsData, asigData) {
 }
 
 async function getEmpleados(opts = {}) {
-  let ref = db.collection('empleados');
+  const snapshot = await db.collection('empleados').get();
+  let data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   if (opts.search) {
-    const s = opts.search;
-    ref = ref.where('nombre', '>=', s).where('nombre', '<=', s + '\uf8ff');
+    const s = opts.search.toLowerCase();
+    data = data.filter(e => (e.nombre || '').toLowerCase().includes(s));
   }
-  if (opts.sector) ref = ref.where('sector', '==', opts.sector);
-  if (opts.orderBy) ref = ref.orderBy(opts.orderBy, opts.orderDir || 'asc');
-  else ref = ref.orderBy('nombre');
-  const snapshot = await ref.get();
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (opts.sector) data = data.filter(e => e.sector === opts.sector);
+  const dir = opts.orderDir === 'desc' ? -1 : 1;
+  const field = opts.orderBy || 'nombre';
+  data.sort((a, b) => {
+    const va = a[field], vb = b[field];
+    if (!va && !vb) return 0;
+    if (!va) return 1;
+    if (!vb) return -1;
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+  return data;
 }
 
 async function getChips(opts = {}) {
@@ -129,7 +136,7 @@ async function getAsignaciones() {
 let currentSection = 'dashboard';
 
 document.addEventListener('input', e => {
-  if (e.target.matches('input[type="text"], input[type="email"], input[type="search"]')) {
+  if (e.target.matches('input[type="text"]:not(.no-upper), input[type="email"]:not(.no-upper), input[type="search"]:not(.no-upper)')) {
     const start = e.target.selectionStart;
     const end = e.target.selectionEnd;
     if (e.target.value !== e.target.value.toUpperCase()) {
@@ -315,13 +322,13 @@ async function loadDashboard() {
 
 async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando...</td></tr>';
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
     const data = await getEmpleados({ search: search || undefined, sector: sector || undefined, orderBy: 'nombre' });
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(e => `
@@ -331,6 +338,7 @@ async function loadEmpleados() {
         <td>${escapeHtml(e.email || '')}</td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
         <td>${escapeHtml(e.observaciones || '')}</td>
+        <td>${e.cp_email ? '<span class="badge badge-info">CP: ' + escapeHtml(e.cp_email) + '</span>' : '—'}</td>
         <td>
           <div class="table-actions">
             <button class="btn-icon" onclick="editEmpleado('${e.id}')" title="Editar">✏️</button>
@@ -340,7 +348,7 @@ async function loadEmpleados() {
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
     showToast('Error al cargar empleados', 'error');
   }
 }
@@ -353,18 +361,20 @@ async function saveEmpleado() {
     email: document.getElementById('emp-email').value.trim(),
     contraseña: document.getElementById('emp-contraseña').value.trim(),
     sector: document.getElementById('emp-sector').value.trim(),
-    observaciones: document.getElementById('emp-observaciones').value.trim()
+    observaciones: document.getElementById('emp-observaciones').value.trim(),
+    cp_email: document.getElementById('emp-cp-email').value.trim(),
+    cp_pass: document.getElementById('emp-cp-pass').value.trim()
   };
   if (!data.nombre) { showToast('El nombre es obligatorio', 'error'); return; }
   try {
     if (id) {
       await db.collection('empleados').doc(id).update(data);
-      // Update employee name/sector in all related asignaciones
+      // Update employee name/sector/cp in all related asignaciones
       const asigSnap = await db.collection('asignaciones').where('empleado_id', '==', id).get();
       if (!asigSnap.empty) {
         const batch = db.batch();
         asigSnap.docs.forEach(doc => {
-          batch.update(doc.ref, { empleado_nombre: data.nombre, empleado_sector: data.sector || '' });
+          batch.update(doc.ref, { empleado_nombre: data.nombre, empleado_sector: data.sector || '', cp_email: data.cp_email, cp_pass: data.cp_pass });
         });
         await batch.commit();
       }
@@ -390,6 +400,8 @@ async function editEmpleado(id) {
     document.getElementById('emp-email').value = data.email || '';
     document.getElementById('emp-contraseña').value = data.contraseña || '';
     document.getElementById('emp-observaciones').value = data.observaciones || '';
+    document.getElementById('emp-cp-email').value = data.cp_email || '';
+    document.getElementById('emp-cp-pass').value = data.cp_pass || '';
     await llenarSelectSectores('emp-sector', data.sector || '');
     document.getElementById('modal-empleado-title').textContent = 'Editar Empleado';
     openModal('empleado-modal');
@@ -403,6 +415,8 @@ async function resetEmpleadoForm() {
   document.getElementById('emp-email').value = '';
   document.getElementById('emp-contraseña').value = '';
   document.getElementById('emp-observaciones').value = '';
+  document.getElementById('emp-cp-email').value = '';
+  document.getElementById('emp-cp-pass').value = '';
   await llenarSelectSectores('emp-sector');
   document.getElementById('modal-empleado-title').textContent = 'Nuevo Empleado';
 }
@@ -790,7 +804,7 @@ async function buscarEmpleados(query) {
       return;
     }
     suggest.innerHTML = items.map(e =>
-      `<div class="suggest-item" data-id="${e.id}" data-nombre="${escapeHtml(e.nombre)}" data-telefono="${escapeHtml(e.telefono || '')}" data-email="${escapeHtml(e.email || '')}" data-contraseña="${escapeHtml(e.contraseña || '')}" data-sector="${escapeHtml(e.sector || '')}">
+      `<div class="suggest-item" data-id="${e.id}" data-nombre="${escapeHtml(e.nombre)}" data-telefono="${escapeHtml(e.telefono || '')}" data-email="${escapeHtml(e.email || '')}" data-contraseña="${escapeHtml(e.contraseña || '')}" data-sector="${escapeHtml(e.sector || '')}" data-cp-email="${escapeHtml(e.cp_email || '')}" data-cp-pass="${escapeHtml(e.cp_pass || '')}">
         <strong>${escapeHtml(e.nombre)}</strong>
         ${e.sector ? '<span style="font-size:11px;color:var(--text-muted)"> — ' + escapeHtml(e.sector) + '</span>' : ''}
       </div>`
@@ -808,6 +822,8 @@ function seleccionarEmpleadoSugerido(el) {
   document.getElementById('asig-email').value = el.dataset.email;
   document.getElementById('asig-contraseña').value = el.dataset.contraseña;
   document.getElementById('asig-sector').value = el.dataset.sector;
+  document.getElementById('asig-cp-email').value = el.dataset.cpEmail;
+  document.getElementById('asig-cp-pass').value = el.dataset.cpPass;
   document.getElementById('asig-empleado-suggest').style.display = 'none';
   document.getElementById('asig-empleado-selected-nombre').textContent = el.dataset.nombre;
   document.getElementById('asig-empleado-selected').style.display = 'block';
@@ -852,6 +868,9 @@ async function asignarChip() {
 
   try {
     if (!empleado_id) {
+      const cpEmail = document.getElementById('asig-cp-email').value.trim();
+      const cpPass = document.getElementById('asig-cp-pass').value.trim();
+      const cpChecked = document.getElementById('asig-control-parental').checked;
       const empData = {
         nombre: empNombre,
         dni: document.getElementById('asig-dni').value.trim(),
@@ -859,6 +878,8 @@ async function asignarChip() {
         email: document.getElementById('asig-email').value.trim(),
         contraseña: document.getElementById('asig-contraseña').value.trim(),
         sector: document.getElementById('asig-sector').value,
+        cp_email: cpChecked ? cpEmail : '',
+        cp_pass: cpChecked ? cpPass : '',
         createdAt: new Date().toISOString()
       };
       const empRef = await db.collection('empleados').add(empData);
@@ -907,6 +928,12 @@ async function asignarChip() {
         await asigRef.update({ acta_url, acta_path: actaPath });
       }
     }
+
+    // Persist control parental data in employee record
+    await db.collection('empleados').doc(empleado_id).update({
+      cp_email: cpChecked ? cpEmail : '',
+      cp_pass: cpChecked ? cpPass : ''
+    });
 
     enviarEmailAsignacion(empData, chipsData, { control_parental: cpChecked, cp_email: cpEmail, cp_pass: cpPass });
     showToast('Chip(es) asignado(s) correctamente');

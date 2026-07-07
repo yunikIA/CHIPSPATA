@@ -621,12 +621,15 @@ async function loadSectores() {
 }
 
 async function saveSector() {
+  const btn = document.getElementById('btn-salvar-sector');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
   const id = document.getElementById('sector-id').value;
   const data = {
     nombre: document.getElementById('sector-nombre').value.trim().toUpperCase(),
     color: document.getElementById('sector-color').value
   };
-  if (!data.nombre) { showToast('El nombre es obligatorio', 'error'); return; }
+  if (!data.nombre) { showToast('El nombre es obligatorio', 'error'); btn.disabled = false; btn.textContent = 'Guardar'; return; }
   try {
     if (id) {
       await db.collection('sectores').doc(id).update(data);
@@ -639,6 +642,8 @@ async function saveSector() {
     closeModal(document.getElementById('sector-modal'));
     loadSectores();
   } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  btn.disabled = false;
+  btn.textContent = 'Guardar';
 }
 
 async function editSector(id) {

@@ -149,7 +149,6 @@ function setupNavigation() {
       const rows = this.querySelectorAll('.asig-chip-row');
       if (rows.length > 1) {
         e.target.closest('.asig-chip-row').remove();
-        setupChipSelectExclusion();
       }
     }
   });
@@ -796,7 +795,6 @@ async function asignarChip() {
     const celular_asignado = row.querySelector('.asig-chip-celular').checked;
     const modelo_celular = row.querySelector('.asig-chip-modelo').value.trim();
     chipsData.push({ chip_id, chip_numero, celular_asignado, modelo_celular });
-    chip_ids.push(chip_id);
   }
   if (chipsData.length === 0) { showToast('Seleccioná al menos un chip', 'error'); return; }
   const observaciones = document.getElementById('asig-observaciones').value.trim();

@@ -1210,28 +1210,34 @@ async function importarExcel() {
 
 async function exportarEmpleados() {
   try {
-    showToast('Exportando empleados...', 'info');
-    const snapshot = await db.collection('empleados').get();
-    const data = snapshot.docs.map(d => d.data());
-    if (data.length === 0) {
-      showToast('No hay empleados para exportar', 'warning');
+    showToast('Exportando asignaciones...', 'info');
+    const [asigSnap, empSnap] = await Promise.all([
+      db.collection('asignaciones').get(),
+      db.collection('empleados').get()
+    ]);
+    const empMap = {};
+    empSnap.docs.forEach(d => { empMap[d.id] = d.data(); });
+    const rows = asigSnap.docs.map(d => {
+      const a = d.data();
+      const emp = empMap[a.empleado_id] || {};
+      return {
+        'Nombre': a.empleado_nombre || emp.nombre || '',
+        'Numero Asignado': a.chip_numero || '',
+        'Mail': emp.email || '',
+        'Contraseña': emp.contraseña || ''
+      };
+    });
+    if (rows.length === 0) {
+      showToast('No hay asignaciones para exportar', 'warning');
       return;
     }
-    const rows = data.map(e => ({
-      'Nombre': e.nombre || '',
-      'Numero de telefono': e.telefono || '',
-      'Mail': e.email || '',
-      'Contraseña': e.contraseña || '',
-      'SECTOR': e.sector || '',
-      'Observaciones': e.observaciones || ''
-    }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
+    XLSX.utils.book_append_sheet(wb, ws, 'Asignaciones');
     const now = new Date();
     const fecha = now.toISOString().split('T')[0];
-    XLSX.writeFile(wb, `empleados_${fecha}.xlsx`);
-    showToast('Empleados exportados correctamente');
+    XLSX.writeFile(wb, `asignaciones_${fecha}.xlsx`);
+    showToast('Asignaciones exportadas correctamente');
   } catch (err) {
     showToast('Error al exportar: ' + err.message, 'error');
   }

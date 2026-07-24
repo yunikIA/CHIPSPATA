@@ -162,16 +162,6 @@ async function init() {
     } else {
       app.style.display = 'none';
       loginScreen.style.display = 'flex';
-      // Check if admin has been set up
-      try {
-        const configDoc = await db.collection('admin').doc('config').get();
-        const setupDone = configDoc.exists && configDoc.data().setupComplete;
-        document.getElementById('login-form').style.display = setupDone ? 'block' : 'none';
-        document.getElementById('setup-form').style.display = setupDone ? 'none' : 'block';
-      } catch {
-        document.getElementById('login-form').style.display = 'block';
-        document.getElementById('setup-form').style.display = 'none';
-      }
     }
   });
 }
@@ -277,12 +267,7 @@ function setupNavigation() {
   });
 
   // Auth event listeners
-  document.getElementById('btn-login').addEventListener('click', login);
-  document.getElementById('btn-setup-admin').addEventListener('click', setupAdmin);
-  document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-  document.getElementById('setup-password').addEventListener('keydown', e => { if (e.key === 'Enter') setupAdmin(); });
-  document.getElementById('setup-email').addEventListener('keydown', e => { if (e.key === 'Enter') setupAdmin(); });
+  document.getElementById('btn-google-login').addEventListener('click', loginWithGoogle);
 
   // Event delegation for historial buttons
   document.getElementById('historial-tbody').addEventListener('click', function(e) {
@@ -313,38 +298,17 @@ function showToast(message, type = 'success') {
 
 // ========== AUTH ==========
 
-async function login() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-password').value.trim();
-  const error = document.getElementById('login-error');
-  if (!email || !pass) { error.textContent = 'Completá ambos campos'; error.style.display = 'block'; return; }
-  error.style.display = 'none';
-  try {
-    await auth.signInWithEmailAndPassword(email, pass);
-  } catch (err) {
-    error.textContent = err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'
-      ? 'Email o contraseña incorrectos'
-      : err.code === 'auth/too-many-requests'
-        ? 'Demasiados intentos. Esperá unos minutos.'
-        : 'Error: ' + err.message;
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => {
+    const error = document.getElementById('login-error');
+    if (err.code === 'auth/popup-closed-by-user') {
+      error.textContent = 'Se cerró la ventana de login';
+    } else {
+      error.textContent = 'Error: ' + err.message;
+    }
     error.style.display = 'block';
-  }
-}
-
-async function setupAdmin() {
-  const email = document.getElementById('setup-email').value.trim();
-  const pass = document.getElementById('setup-password').value.trim();
-  const error = document.getElementById('setup-error');
-  if (!email || !pass) { error.textContent = 'Completá ambos campos'; error.style.display = 'block'; return; }
-  if (pass.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.style.display = 'block'; return; }
-  error.style.display = 'none';
-  try {
-    await auth.createUserWithEmailAndPassword(email, pass);
-    await db.collection('admin').doc('config').set({ setupComplete: true }, { merge: true });
-  } catch (err) {
-    error.textContent = 'Error: ' + err.message;
-    error.style.display = 'block';
-  }
+  });
 }
 
 function logout() {

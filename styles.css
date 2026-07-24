@@ -272,12 +272,16 @@ body {
 .stat-card.info .stat-value { color: var(--info); }
 
 /* Table */
-.table-container { overflow-x: auto; }
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  min-width: 900px;
 }
 
 thead { background: var(--bg); }
@@ -305,6 +309,10 @@ tr:hover { background: #f8fafc; }
 .table-actions {
   display: flex;
   gap: 4px;
+  position: sticky;
+  right: 0;
+  background: white;
+  padding: 4px 0;
 }
 
 /* Badges */

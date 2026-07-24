@@ -375,7 +375,7 @@
         <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;font-size:13px;color:var(--text-muted)">
           <strong>💡 Tips:</strong>
           <ul style="margin:8px 0 0 16px">
-            <li>El archivo debe tener columnas como: Nombre, Teléfono, Email, Sector, etc.</li>
+            <li>El archivo debe tener columnas: Nombre, Numero de telefono, Mail, Contraseña, SECTOR, Observaciones</li>
             <li>Los empleados se importarán evitando duplicados por nombre</li>
             <li>Después de importar, revisá la sección Empleados y luego cargá los chips manualmente</li>
             <li>También podés importar los chips con <strong>Nuevo Chip</strong> desde la sección Chips SIM</li>
@@ -386,13 +386,13 @@
     </div>
 
     <div class="card" style="margin-top:24px">
-      <div class="card-header">📤 Exportar Datos</div>
       <div class="card-body">
-        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px">Exportá los datos del sistema a un archivo Excel (.xlsx)</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <button class="btn btn-primary" id="btn-exportar-empleados">👤 Exportar Empleados</button>
-          <button class="btn btn-primary" id="btn-exportar-chips">📱 Exportar Chips</button>
-          <button class="btn btn-primary" id="btn-exportar-asignaciones">📋 Exportar Asignaciones</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <h3 style="margin:0;font-size:16px">📤 Exportar Empleados</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Descargá la lista de empleados en Excel</p>
+          </div>
+          <button class="btn btn-primary" id="btn-exportar">📥 Descargar Excel</button>
         </div>
       </div>
     </div>

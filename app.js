@@ -191,9 +191,7 @@ function setupNavigation() {
     }
   });
   document.getElementById('btn-importar').addEventListener('click', importarExcel);
-  document.getElementById('btn-exportar-empleados').addEventListener('click', () => exportarExcel('empleados'));
-  document.getElementById('btn-exportar-chips').addEventListener('click', () => exportarExcel('chips'));
-  document.getElementById('btn-exportar-asignaciones').addEventListener('click', () => exportarExcel('asignaciones'));
+  document.getElementById('btn-exportar').addEventListener('click', exportarEmpleados);
   document.getElementById('btn-limpiar-todo').addEventListener('click', limpiarTodo);
   document.getElementById('file-input').addEventListener('change', previewExcel);
   document.getElementById('import-area').addEventListener('click', () => document.getElementById('file-input').click());
@@ -1210,36 +1208,30 @@ async function importarExcel() {
 
 // ========== EXPORTAR EXCEL ==========
 
-async function exportarExcel(coleccion) {
+async function exportarEmpleados() {
   try {
-    showToast(`Exportando ${coleccion}...`, 'info');
-    const snapshot = await db.collection(coleccion).get();
+    showToast('Exportando empleados...', 'info');
+    const snapshot = await db.collection('empleados').get();
     const data = snapshot.docs.map(d => d.data());
     if (data.length === 0) {
-      showToast(`No hay ${coleccion} para exportar`, 'warning');
+      showToast('No hay empleados para exportar', 'warning');
       return;
     }
-    let rows;
-    if (coleccion === 'empleados') {
-      rows = data.map(e => ({
-        'Nombre': e.nombre || '',
-        'Numero de telefono': e.telefono || '',
-        'Mail': e.email || '',
-        'Contraseña': e.contraseña || '',
-        'SECTOR': e.sector || '',
-        'Observaciones': e.observaciones || ''
-      }));
-    } else {
-      rows = data;
-    }
+    const rows = data.map(e => ({
+      'Nombre': e.nombre || '',
+      'Numero de telefono': e.telefono || '',
+      'Mail': e.email || '',
+      'Contraseña': e.contraseña || '',
+      'SECTOR': e.sector || '',
+      'Observaciones': e.observaciones || ''
+    }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, capitalize(coleccion));
+    XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
     const now = new Date();
     const fecha = now.toISOString().split('T')[0];
-    const filename = `${coleccion}_${fecha}.xlsx`;
-    XLSX.writeFile(wb, filename);
-    showToast(`${capitalize(coleccion)} exportados correctamente`);
+    XLSX.writeFile(wb, `empleados_${fecha}.xlsx`);
+    showToast('Empleados exportados correctamente');
   } catch (err) {
     showToast('Error al exportar: ' + err.message, 'error');
   }

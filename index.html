@@ -361,6 +361,9 @@
         <h1>Importar Datos</h1>
         <div class="subtitle">Subir archivo Excel para importar empleados y chips</div>
       </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadSection('empleados')">← Volver</button>
+      </div>
     </div>
     <div class="card">
       <div class="card-body">
@@ -371,7 +374,10 @@
           <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
         </div>
         <div id="import-preview" style="display:none;margin-top:16px"></div>
-        <button class="btn btn-success" id="btn-importar" style="display:none;margin-top:16px">📥 Importar</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+          <button class="btn btn-success" id="btn-importar" style="display:none">📥 Importar</button>
+          <button class="btn btn-warning" id="btn-deshacer" style="display:none">↩ Deshacer importación</button>
+        </div>
         <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;font-size:13px;color:var(--text-muted)">
           <strong>💡 Tips:</strong>
           <ul style="margin:8px 0 0 16px">

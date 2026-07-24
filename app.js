@@ -191,6 +191,7 @@ function setupNavigation() {
     }
   });
   document.getElementById('btn-importar').addEventListener('click', importarExcel);
+  document.getElementById('btn-deshacer').addEventListener('click', deshacerImport);
   document.getElementById('btn-exportar').addEventListener('click', exportarEmpleados);
   document.getElementById('btn-limpiar-todo').addEventListener('click', limpiarTodo);
   document.getElementById('file-input').addEventListener('change', previewExcel);
@@ -1161,6 +1162,11 @@ async function importarExcel() {
   const btn = document.getElementById('btn-importar');
   btn.disabled = true;
   btn.textContent = 'Importando...';
+
+  // Backup before import
+  const backupSnap = await db.collection('empleados').get();
+  const backup = backupSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
   let importados = 0;
   let errores = 0;
   for (const row of data) {
@@ -1196,14 +1202,50 @@ async function importarExcel() {
       importados++;
     } catch (e) { errores++; }
   }
+
+  window._importBackup = backup;
   showToast(`Importación completada: ${importados} importados, ${errores} errores`, errores > 0 ? 'warning' : 'success');
   btn.disabled = false;
-  btn.textContent = 'Importar Datos';
+  btn.textContent = '📥 Importar';
   window._importData = null;
   document.getElementById('import-preview').innerHTML = '';
   document.getElementById('import-preview').style.display = 'none';
   document.getElementById('btn-importar').style.display = 'none';
   document.getElementById('file-input').value = '';
+
+  const undoBtn = document.getElementById('btn-deshacer');
+  if (backup.length > 0) {
+    undoBtn.style.display = 'inline-flex';
+  }
+}
+
+async function deshacerImport() {
+  const backup = window._importBackup;
+  if (!backup || backup.length === 0) { showToast('No hay datos para deshacer', 'error'); return; }
+  if (!confirm('¿Deshacer la última importación? Se restaurarán los datos anteriores.')) return;
+  const btn = document.getElementById('btn-deshacer');
+  btn.disabled = true;
+  btn.textContent = 'Deshaciendo...';
+  try {
+    const currentSnap = await db.collection('empleados').get();
+    const batch = db.batch();
+    currentSnap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    const batch2 = db.batch();
+    for (const emp of backup) {
+      const { id, ...rest } = emp;
+      batch2.set(db.collection('empleados').doc(), rest);
+    }
+    await batch2.commit();
+    showToast('Importación deshecha. Datos restaurados.');
+    btn.style.display = 'none';
+    window._importBackup = null;
+    loadEmpleados();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '↩ Deshacer importación';
 }
 
 // ========== EXPORTAR EXCEL ==========

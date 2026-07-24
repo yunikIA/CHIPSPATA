@@ -372,10 +372,10 @@ async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
   tbody.innerHTML = '<tr><td colspan="11" class="loading">Cargando...</td></tr>';
   try {
-    const search = document.getElementById('search-empleados').value.trim();
+    const search = document.getElementById('search-empleados').value.trim().toLowerCase();
     const sector = document.getElementById('filter-sector').value;
     const [empleados, asigSnap] = await Promise.all([
-      getEmpleados({ search: search || undefined, sector: sector || undefined, orderBy: 'nombre' }),
+      getEmpleados({ sector: sector || undefined, orderBy: 'nombre' }),
       db.collection('asignaciones').where('fecha_devolucion', '==', null).get()
     ]);
     const asigMap = {};
@@ -384,11 +384,22 @@ async function loadEmpleados() {
       if (!asigMap[a.empleado_id]) asigMap[a.empleado_id] = [];
       asigMap[a.empleado_id].push({ id: d.id, ...a });
     });
-    if (empleados.length === 0) {
+
+    let filtered = empleados;
+    if (search) {
+      filtered = empleados.filter(e => {
+        const nombreMatch = (e.nombre || '').toLowerCase().includes(search);
+        const asignaciones = asigMap[e.id] || [];
+        const chipMatch = asignaciones.some(a => (a.chip_numero || '').toLowerCase().includes(search));
+        return nombreMatch || chipMatch;
+      });
+    }
+
+    if (filtered.length === 0) {
       tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
-    tbody.innerHTML = empleados.map(e => {
+    tbody.innerHTML = filtered.map(e => {
       const asignaciones = asigMap[e.id] || [];
       const a = asignaciones[0] || {};
       const tieneAsig = !!a.id;

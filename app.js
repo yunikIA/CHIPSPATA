@@ -1,4 +1,4 @@
-let db, storage;
+let db, storage, auth;
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDIF9gKLFtKdXES3t6nMYj1qzWZSIpL4Wc",
@@ -15,6 +15,7 @@ function initFirebase() {
     db = firebase.firestore();
     db.settings({ merge: true });
     storage = firebase.storage();
+    auth = firebase.auth();
     const emailCfg = getEmailConfig();
     if (emailCfg && typeof emailjs !== 'undefined') {
       emailjs.init(emailCfg.publicKey);
@@ -150,7 +151,29 @@ async function init() {
   await cargarSectoresDefecto();
   await llenarSelectSectores('filter-sector', '', 'Todos los sectores');
   setupNavigation();
-  loadSection('dashboard');
+
+  auth.onAuthStateChanged(async user => {
+    const loginScreen = document.getElementById('login-screen');
+    const app = document.getElementById('app');
+    if (user) {
+      loginScreen.style.display = 'none';
+      app.style.display = 'block';
+      loadSection('dashboard');
+    } else {
+      app.style.display = 'none';
+      loginScreen.style.display = 'flex';
+      // Check if admin has been set up
+      try {
+        const configDoc = await db.collection('admin').doc('config').get();
+        const setupDone = configDoc.exists && configDoc.data().setupComplete;
+        document.getElementById('login-form').style.display = setupDone ? 'block' : 'none';
+        document.getElementById('setup-form').style.display = setupDone ? 'none' : 'block';
+      } catch {
+        document.getElementById('login-form').style.display = 'block';
+        document.getElementById('setup-form').style.display = 'none';
+      }
+    }
+  });
 }
 
 function setupNavigation() {
@@ -178,6 +201,9 @@ function setupNavigation() {
     }
   });
   document.getElementById('btn-importar').addEventListener('click', importarExcel);
+  document.getElementById('btn-exportar-empleados').addEventListener('click', () => exportarExcel('empleados'));
+  document.getElementById('btn-exportar-chips').addEventListener('click', () => exportarExcel('chips'));
+  document.getElementById('btn-exportar-asignaciones').addEventListener('click', () => exportarExcel('asignaciones'));
   document.getElementById('btn-limpiar-todo').addEventListener('click', limpiarTodo);
   document.getElementById('file-input').addEventListener('change', previewExcel);
   document.getElementById('import-area').addEventListener('click', () => document.getElementById('file-input').click());
@@ -250,6 +276,14 @@ function setupNavigation() {
     }
   });
 
+  // Auth event listeners
+  document.getElementById('btn-login').addEventListener('click', login);
+  document.getElementById('btn-setup-admin').addEventListener('click', setupAdmin);
+  document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  document.getElementById('setup-password').addEventListener('keydown', e => { if (e.key === 'Enter') setupAdmin(); });
+  document.getElementById('setup-email').addEventListener('keydown', e => { if (e.key === 'Enter') setupAdmin(); });
+
   // Event delegation for historial buttons
   document.getElementById('historial-tbody').addEventListener('click', function(e) {
     const verBtn = e.target.closest('.ver-acta-btn');
@@ -276,6 +310,48 @@ function showToast(message, type = 'success') {
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
+
+// ========== AUTH ==========
+
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value.trim();
+  const error = document.getElementById('login-error');
+  if (!email || !pass) { error.textContent = 'Completá ambos campos'; error.style.display = 'block'; return; }
+  error.style.display = 'none';
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch (err) {
+    error.textContent = err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'
+      ? 'Email o contraseña incorrectos'
+      : err.code === 'auth/too-many-requests'
+        ? 'Demasiados intentos. Esperá unos minutos.'
+        : 'Error: ' + err.message;
+    error.style.display = 'block';
+  }
+}
+
+async function setupAdmin() {
+  const email = document.getElementById('setup-email').value.trim();
+  const pass = document.getElementById('setup-password').value.trim();
+  const error = document.getElementById('setup-error');
+  if (!email || !pass) { error.textContent = 'Completá ambos campos'; error.style.display = 'block'; return; }
+  if (pass.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.style.display = 'block'; return; }
+  error.style.display = 'none';
+  try {
+    await auth.createUserWithEmailAndPassword(email, pass);
+    await db.collection('admin').doc('config').set({ setupComplete: true }, { merge: true });
+  } catch (err) {
+    error.textContent = 'Error: ' + err.message;
+    error.style.display = 'block';
+  }
+}
+
+function logout() {
+  auth.signOut();
+}
+
+// ========== NAVIGATION ==========
 
 function loadSection(section) {
   currentSection = section;
@@ -322,22 +398,39 @@ async function loadDashboard() {
 
 async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
-  tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando...</td></tr>';
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
-    const data = await getEmpleados({ search: search || undefined, sector: sector || undefined, orderBy: 'nombre' });
-    if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
+    const [empleados, asigSnap] = await Promise.all([
+      getEmpleados({ search: search || undefined, sector: sector || undefined, orderBy: 'nombre' }),
+      db.collection('asignaciones').where('fecha_devolucion', '==', null).get()
+    ]);
+    const asigMap = {};
+    asigSnap.docs.forEach(d => {
+      const a = d.data();
+      if (!asigMap[a.empleado_id]) asigMap[a.empleado_id] = [];
+      asigMap[a.empleado_id].push({ id: d.id, ...a });
+    });
+    if (empleados.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
-    tbody.innerHTML = data.map(e => `
+    tbody.innerHTML = empleados.map(e => {
+      const asignaciones = asigMap[e.id] || [];
+      const chipsInfo = asignaciones.map(a => a.chip_numero).join(', ') || '—';
+      const obs = asignaciones.length > 0 ? asignaciones[0].observaciones || '' : '';
+      const asigId = asignaciones.length > 0 ? asignaciones[0].id : '';
+      return `
       <tr>
         <td><strong>${escapeHtml(e.nombre)}</strong></td>
         <td>${escapeHtml(e.telefono || '')}</td>
         <td>${escapeHtml(e.email || '')}</td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
-        <td>${escapeHtml(e.observaciones || '')}</td>
+        <td>${chipsInfo !== '—' ? '<span class="badge badge-warning">' + escapeHtml(chipsInfo) + '</span>' : '—'}</td>
+        <td>
+          ${asigId ? '<input type="text" class="edit-obs-input" data-asig-id="' + asigId + '" value="' + escapeHtml(obs) + '" placeholder="Sin observación" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:13px;width:140px">' : '—'}
+        </td>
         <td>${e.cp_email ? '<span class="badge badge-info">CP: ' + escapeHtml(e.cp_email) + '</span>' : '—'}</td>
         <td>
           <div class="table-actions">
@@ -346,9 +439,22 @@ async function loadEmpleados() {
           </div>
         </td>
       </tr>
-    `).join('');
+    `}).join('');
+
+    tbody.querySelectorAll('.edit-obs-input').forEach(input => {
+      input.addEventListener('change', async function() {
+        const asigId = this.dataset.asigId;
+        const val = this.value.trim();
+        try {
+          await db.collection('asignaciones').doc(asigId).update({ observaciones: val });
+          showToast('Observación actualizada');
+        } catch (err) {
+          showToast('Error: ' + err.message, 'error');
+        }
+      });
+    });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
     showToast('Error al cargar empleados', 'error');
   }
 }
@@ -1136,6 +1242,43 @@ async function importarExcel() {
   document.getElementById('import-preview').style.display = 'none';
   document.getElementById('btn-importar').style.display = 'none';
   document.getElementById('file-input').value = '';
+}
+
+// ========== EXPORTAR EXCEL ==========
+
+async function exportarExcel(coleccion) {
+  try {
+    showToast(`Exportando ${coleccion}...`, 'info');
+    const snapshot = await db.collection(coleccion).get();
+    const data = snapshot.docs.map(d => d.data());
+    if (data.length === 0) {
+      showToast(`No hay ${coleccion} para exportar`, 'warning');
+      return;
+    }
+    let rows;
+    if (coleccion === 'empleados') {
+      rows = data.map(e => ({
+        'Nombre': e.nombre || '',
+        'Numero de telefono': e.telefono || '',
+        'Mail': e.email || '',
+        'Contraseña': e.contraseña || '',
+        'SECTOR': e.sector || '',
+        'Observaciones': e.observaciones || ''
+      }));
+    } else {
+      rows = data;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, capitalize(coleccion));
+    const now = new Date();
+    const fecha = now.toISOString().split('T')[0];
+    const filename = `${coleccion}_${fecha}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast(`${capitalize(coleccion)} exportados correctamente`);
+  } catch (err) {
+    showToast('Error al exportar: ' + err.message, 'error');
+  }
 }
 
 // ========== LIMPIAR TODO ==========

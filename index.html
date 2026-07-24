@@ -8,12 +8,33 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
-<div id="app">
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">📡</div>
+    <h2 style="margin-bottom:20px">Control de Chips</h2>
+    <div id="login-form">
+      <input type="email" id="login-email" placeholder="Correo electrónico">
+      <input type="password" id="login-password" placeholder="Contraseña">
+      <button class="btn btn-primary" id="btn-login" style="width:100%">Ingresar</button>
+      <p id="login-error" class="login-error" style="display:none"></p>
+    </div>
+    <div id="setup-form" style="display:none">
+      <p style="margin-bottom:16px;color:var(--text-muted)">Crear administrador por primera vez:</p>
+      <input type="email" id="setup-email" placeholder="Correo electrónico">
+      <input type="password" id="setup-password" placeholder="Contraseña">
+      <button class="btn btn-primary" id="btn-setup-admin" style="width:100%">Crear Admin</button>
+      <p id="setup-error" class="login-error" style="display:none"></p>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 
 <div class="navbar">
   <div class="navbar-brand">
@@ -30,6 +51,7 @@
   </div>
   <div class="nav-links" style="margin-left:auto">
     <a onclick="abrirConfigEmail()" title="Configurar Email" style="font-size:18px">⚙️</a>
+    <a onclick="logout()" title="Cerrar sesión" style="font-size:16px;cursor:pointer;margin-left:8px">🚪</a>
   </div>
 </div>
 
@@ -104,13 +126,14 @@
                 <th>Teléfono</th>
                 <th>Email</th>
                 <th>Sector</th>
-                <th>Observaciones</th>
+                <th>Chip Asignado</th>
+                <th>Observación Chip</th>
                 <th>Control Parental</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="empleados-tbody">
-              <tr><td colspan="7" class="loading">Cargando...</td></tr>
+              <tr><td colspan="8" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -363,6 +386,19 @@
             <li>Después de importar, revisá la sección Empleados y luego cargá los chips manualmente</li>
             <li>También podés importar los chips con <strong>Nuevo Chip</strong> desde la sección Chips SIM</li>
           </ul>
+          <p style="margin-top:12px"><a href="ejemplo_importar.xlsx" download class="btn btn-secondary" style="font-size:13px;padding:6px 14px;text-decoration:none">📄 Descargar ejemplo (.xlsx)</a></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px">
+      <div class="card-header">📤 Exportar Datos</div>
+      <div class="card-body">
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px">Exportá los datos del sistema a un archivo Excel (.xlsx)</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btn-exportar-empleados">👤 Exportar Empleados</button>
+          <button class="btn btn-primary" id="btn-exportar-chips">📱 Exportar Chips</button>
+          <button class="btn btn-primary" id="btn-exportar-asignaciones">📋 Exportar Asignaciones</button>
         </div>
       </div>
     </div>

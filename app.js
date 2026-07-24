@@ -216,6 +216,7 @@ function setupNavigation() {
   });
   document.getElementById('btn-nuevo-sector').addEventListener('click', () => { resetSectorForm(); openModal('sector-modal'); });
   document.getElementById('btn-salvar-sector').addEventListener('click', saveSector);
+  document.getElementById('btn-save-asig-edit').addEventListener('click', guardarEdicionAsignacion);
   document.getElementById('sector-color').addEventListener('input', function() {
     document.getElementById('sector-color-val').textContent = this.value;
   });
@@ -369,7 +370,7 @@ async function loadDashboard() {
 
 async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
-  tbody.innerHTML = '<tr><td colspan="10" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="loading">Cargando...</td></tr>';
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
@@ -384,30 +385,32 @@ async function loadEmpleados() {
       asigMap[a.empleado_id].push({ id: d.id, ...a });
     });
     if (empleados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = empleados.map(e => {
       const asignaciones = asigMap[e.id] || [];
-      const chipsInfo = asignaciones.map(a => a.chip_numero).join(', ') || '—';
-      const obs = asignaciones.length > 0 ? asignaciones[0].observaciones || '' : '';
-      const asigId = asignaciones.length > 0 ? asignaciones[0].id : '';
+      const a = asignaciones[0] || {};
+      const tieneAsig = !!a.id;
+      const actaBtn = a.acta_url
+        ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver</button>`
+        : '—';
       return `
       <tr>
         <td><input type="checkbox" class="empleado-checkbox" data-id="${e.id}"></td>
         <td><strong>${escapeHtml(e.nombre)}</strong></td>
-        <td>${escapeHtml(e.telefono || '')}</td>
-        <td>${escapeHtml(e.email || '')}</td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
-        <td>${escapeHtml(e.observaciones || '')}</td>
-        <td>${chipsInfo !== '—' ? '<span class="badge badge-warning">' + escapeHtml(chipsInfo) + '</span>' : '—'}</td>
-        <td>
-          ${asigId ? '<input type="text" class="edit-obs-input" data-asig-id="' + asigId + '" value="' + escapeHtml(obs) + '" placeholder="Sin observación" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:13px;width:140px">' : '—'}
-        </td>
-        <td>${e.cp_email ? '<span class="badge badge-info">CP: ' + escapeHtml(e.cp_email) + '</span>' : '—'}</td>
+        <td>${tieneAsig ? '<span class="badge badge-warning">' + escapeHtml(a.chip_numero || '') + '</span>' : '—'}</td>
+        <td>${tieneAsig ? '<span style="font-size:12px">' + formatDate(a.fecha_asignacion) + '</span>' : '—'}</td>
+        <td>${tieneAsig ? (a.fecha_devolucion ? '<span style="font-size:12px">' + formatDate(a.fecha_devolucion) + '</span>' : '<span class="badge badge-warning">Activo</span>') : '—'}</td>
+        <td>${tieneAsig ? (a.celular_asignado ? '✅' + (a.modelo_celular ? ' ' + escapeHtml(a.modelo_celular) : '') : '❌') : '—'}</td>
+        <td>${tieneAsig ? (a.control_parental ? '<span class="badge badge-info">🔒 ' + escapeHtml(a.cp_email || '') + '</span>' : '❌') : '—'}</td>
+        <td>${actaBtn}</td>
+        <td>${tieneAsig ? '<input type="text" class="edit-obs-input" data-asig-id="' + a.id + '" value="' + escapeHtml(a.observaciones || '') + '" placeholder="—" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:120px">' : '—'}</td>
         <td>
           <div class="table-actions">
-            <button class="btn-icon" onclick="editEmpleado('${e.id}')" title="Editar">✏️</button>
+            ${tieneAsig ? '<button class="btn-icon edit-asig-btn" data-id="' + a.id + '" title="Editar asignación">✏️</button>' : ''}
+            <button class="btn-icon" onclick="editEmpleado('${e.id}')" title="Editar empleado">👤</button>
             <button class="btn-icon" onclick="deleteEmpleado('${e.id}')" title="Eliminar">🗑️</button>
           </div>
         </td>
@@ -427,12 +430,70 @@ async function loadEmpleados() {
       });
     });
 
+    tbody.querySelectorAll('.edit-asig-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        editarAsignacionEmpleado(this.dataset.id);
+      });
+    });
+
+    tbody.querySelectorAll('.ver-acta-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        verActa(this.dataset.url);
+      });
+    });
+
     document.getElementById('select-all-empleados').checked = false;
     updateDeleteSelectedBtn();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
     showToast('Error al cargar empleados', 'error');
   }
+}
+
+async function editarAsignacionEmpleado(asigId) {
+  try {
+    const doc = await db.collection('asignaciones').doc(asigId).get();
+    if (!doc.exists) { showToast('Asignación no encontrada', 'error'); return; }
+    const a = doc.data();
+    document.getElementById('asig-edit-id').value = asigId;
+    document.getElementById('asig-edit-chip').value = a.chip_numero || '';
+    document.getElementById('asig-edit-fecha').value = a.fecha_asignacion || '';
+    document.getElementById('asig-edit-devolucion').value = a.fecha_devolucion || '';
+    document.getElementById('asig-edit-celular').checked = a.celular_asignado || false;
+    document.getElementById('asig-edit-modelo').value = a.modelo_celular || '';
+    document.getElementById('asig-edit-cp').checked = a.control_parental || false;
+    document.getElementById('asig-edit-cp-email').value = a.cp_email || '';
+    document.getElementById('asig-edit-cp-pass').value = a.cp_pass || '';
+    document.getElementById('asig-edit-obs').value = a.observaciones || '';
+    openModal('asig-edit-modal');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function guardarEdicionAsignacion() {
+  const asigId = document.getElementById('asig-edit-id').value;
+  if (!asigId) return;
+  const btn = document.getElementById('btn-save-asig-edit');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  try {
+    await db.collection('asignaciones').doc(asigId).update({
+      celular_asignado: document.getElementById('asig-edit-celular').checked,
+      modelo_celular: document.getElementById('asig-edit-modelo').value.trim(),
+      control_parental: document.getElementById('asig-edit-cp').checked,
+      cp_email: document.getElementById('asig-edit-cp-email').value.trim(),
+      cp_pass: document.getElementById('asig-edit-cp-pass').value.trim(),
+      observaciones: document.getElementById('asig-edit-obs').value.trim()
+    });
+    showToast('Asignación actualizada');
+    closeModal(document.getElementById('asig-edit-modal'));
+    loadEmpleados();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Guardar';
 }
 
 function updateDeleteSelectedBtn() {
@@ -1110,12 +1171,7 @@ async function loadAsignacionHistorial() {
         <td>${a.celular_asignado ? '✅ Sí' + (a.modelo_celular ? ' (' + escapeHtml(a.modelo_celular) + ')' : '') : '❌ No'}</td>
         <td>${cpInfo}</td>
         <td>${actaBtn}</td>
-        <td>
-          <div class="table-actions">
-            ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${a.id}" data-chip="${a.chip_id}">↩ Devolver</button>` : ''}
-            <button class="btn-icon delete-asig-btn" data-id="${a.id}" title="Eliminar">🗑️</button>
-          </div>
-        </td>
+        <td>${escapeHtml(a.observaciones || '—')}</td>
       </tr>`;
     }).join('');
   } catch (err) {

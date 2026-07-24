@@ -178,6 +178,14 @@ function setupNavigation() {
   });
   document.getElementById('btn-nuevo-empleado').addEventListener('click', async () => { await resetEmpleadoForm(); openModal('empleado-modal'); });
   document.getElementById('btn-salvar-empleado').addEventListener('click', saveEmpleado);
+  document.getElementById('btn-delete-selected').addEventListener('click', deleteSelectedEmpleados);
+  document.getElementById('select-all-empleados').addEventListener('change', function() {
+    document.querySelectorAll('.empleado-checkbox').forEach(cb => cb.checked = this.checked);
+    updateDeleteSelectedBtn();
+  });
+  document.getElementById('empleados-tbody').addEventListener('change', function(e) {
+    if (e.target.classList.contains('empleado-checkbox')) updateDeleteSelectedBtn();
+  });
   document.getElementById('btn-nuevo-chip').addEventListener('click', () => { resetChipForm(); openModal('chip-modal'); });
   document.getElementById('btn-salvar-chip').addEventListener('click', saveChip);
   document.getElementById('btn-asignar').addEventListener('click', asignarChip);
@@ -361,7 +369,7 @@ async function loadDashboard() {
 
 async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando...</td></tr>';
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
@@ -376,7 +384,7 @@ async function loadEmpleados() {
       asigMap[a.empleado_id].push({ id: d.id, ...a });
     });
     if (empleados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = empleados.map(e => {
@@ -386,6 +394,7 @@ async function loadEmpleados() {
       const asigId = asignaciones.length > 0 ? asignaciones[0].id : '';
       return `
       <tr>
+        <td><input type="checkbox" class="empleado-checkbox" data-id="${e.id}"></td>
         <td><strong>${escapeHtml(e.nombre)}</strong></td>
         <td>${escapeHtml(e.telefono || '')}</td>
         <td>${escapeHtml(e.email || '')}</td>
@@ -416,9 +425,34 @@ async function loadEmpleados() {
         }
       });
     });
+
+    document.getElementById('select-all-empleados').checked = false;
+    updateDeleteSelectedBtn();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
     showToast('Error al cargar empleados', 'error');
+  }
+}
+
+function updateDeleteSelectedBtn() {
+  const checked = document.querySelectorAll('.empleado-checkbox:checked').length;
+  const btn = document.getElementById('btn-delete-selected');
+  document.getElementById('selected-count').textContent = checked;
+  btn.style.display = checked > 0 ? 'inline-flex' : 'none';
+}
+
+async function deleteSelectedEmpleados() {
+  const checked = document.querySelectorAll('.empleado-checkbox:checked');
+  if (checked.length === 0) return;
+  if (!confirm(`¿Eliminar ${checked.length} empleado(s) seleccionado(s)?`)) return;
+  try {
+    for (const cb of checked) {
+      await db.collection('empleados').doc(cb.dataset.id).delete();
+    }
+    showToast(`${checked.length} empleado(s) eliminado(s)`);
+    loadEmpleados();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
   }
 }
 
@@ -1164,41 +1198,89 @@ async function importarExcel() {
   btn.textContent = 'Importando...';
 
   // Backup before import
-  const backupSnap = await db.collection('empleados').get();
-  const backup = backupSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const [backupEmpSnap, backupChipSnap, backupAsigSnap] = await Promise.all([
+    db.collection('empleados').get(),
+    db.collection('chips').get(),
+    db.collection('asignaciones').get()
+  ]);
+  const backup = {
+    empleados: backupEmpSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    chips: backupChipSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    asignaciones: backupAsigSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+  };
 
   let importados = 0;
   let errores = 0;
+  const now = new Date().toISOString();
+  const fecha = now.split('T')[0];
+
   for (const row of data) {
     try {
       const nombre = row['Nombre'] || row['NOMBRE'] || row['Nombre completo'] || row['nombre'] || '';
-      const telefono = row['Numero de telefono'] || row['NUMERO'] || row['Número'] || row['telefono'] || '';
+      const numeroSim = row['Numero de telefono'] || row['NUMERO'] || row['Número'] || row['numero'] || '';
       const email = row['Mail'] || row['MAIL'] || row['mail'] || row['Email'] || '';
       const contraseña = row['Contraseña'] || row['CONTRASEÑA'] || row['contraseña'] || '';
       const sector = row['SECTOR'] || row['Sector'] || row['sector'] || '';
       const observaciones = row['Observaciones'] || row['observaciones'] || '';
-      if (!nombre) { errores++; continue; }
-      const existing = await db.collection('empleados')
-        .where('nombre', '==', String(nombre).trim()).get();
-      if (existing.empty) {
-        await db.collection('empleados').add({
+      if (!nombre || !numeroSim) { errores++; continue; }
+
+      // Find or create employee
+      let empleadoId;
+      const empSnap = await db.collection('empleados').where('nombre', '==', String(nombre).trim()).get();
+      if (empSnap.empty) {
+        const empRef = await db.collection('empleados').add({
           nombre: String(nombre).trim(),
-          telefono: String(telefono).trim(),
           email: String(email).trim(),
           contraseña: String(contraseña).trim(),
           sector: String(sector).trim(),
-          observaciones: String(observaciones).trim(),
-          createdAt: new Date().toISOString()
+          createdAt: now
         });
+        empleadoId = empRef.id;
       } else {
-        await db.collection('empleados').doc(existing.docs[0].id).update({
-          telefono: String(telefono).trim(),
+        empleadoId = empSnap.docs[0].id;
+        await db.collection('empleados').doc(empleadoId).update({
           email: String(email).trim(),
           contraseña: String(contraseña).trim(),
-          sector: String(sector).trim(),
-          observaciones: String(observaciones).trim()
+          sector: String(sector).trim()
         });
       }
+
+      const empData = (await db.collection('empleados').doc(empleadoId).get()).data();
+
+      // Find or create chip
+      let chipId;
+      const chipSnap = await db.collection('chips').where('numero_sim', '==', String(numeroSim).trim()).get();
+      if (chipSnap.empty) {
+        const chipRef = await db.collection('chips').add({
+          numero_sim: String(numeroSim).trim(),
+          operador: '',
+          estado: 'asignado',
+          createdAt: now
+        });
+        chipId = chipRef.id;
+      } else {
+        chipId = chipSnap.docs[0].id;
+        await db.collection('chips').doc(chipId).update({ estado: 'asignado' });
+      }
+
+      // Create assignment
+      await db.collection('asignaciones').add({
+        chip_id: chipId,
+        chip_numero: String(numeroSim).trim(),
+        empleado_id: empleadoId,
+        empleado_nombre: empData.nombre || String(nombre).trim(),
+        empleado_sector: String(sector).trim(),
+        celular_asignado: false,
+        modelo_celular: '',
+        control_parental: false,
+        cp_email: '',
+        cp_pass: '',
+        observaciones: String(observaciones).trim(),
+        fecha_asignacion: fecha,
+        fecha_devolucion: null,
+        createdAt: now
+      });
+
       importados++;
     } catch (e) { errores++; }
   }
@@ -1213,34 +1295,41 @@ async function importarExcel() {
   document.getElementById('btn-importar').style.display = 'none';
   document.getElementById('file-input').value = '';
 
-  const undoBtn = document.getElementById('btn-deshacer');
-  if (backup.length > 0) {
-    undoBtn.style.display = 'inline-flex';
-  }
+  document.getElementById('btn-deshacer').style.display = 'inline-flex';
+  loadDashboard();
 }
 
 async function deshacerImport() {
   const backup = window._importBackup;
-  if (!backup || backup.length === 0) { showToast('No hay datos para deshacer', 'error'); return; }
+  if (!backup) { showToast('No hay datos para deshacer', 'error'); return; }
   if (!confirm('¿Deshacer la última importación? Se restaurarán los datos anteriores.')) return;
   const btn = document.getElementById('btn-deshacer');
   btn.disabled = true;
   btn.textContent = 'Deshaciendo...';
   try {
-    const currentSnap = await db.collection('empleados').get();
-    const batch = db.batch();
-    currentSnap.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    const batch2 = db.batch();
-    for (const emp of backup) {
-      const { id, ...rest } = emp;
-      batch2.set(db.collection('empleados').doc(), rest);
+    for (const col of ['asignaciones', 'chips', 'empleados']) {
+      const snap = await db.collection(col).get();
+      const batch = db.batch();
+      snap.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
     }
-    await batch2.commit();
+    for (const emp of backup.empleados) {
+      const { id, ...rest } = emp;
+      await db.collection('empleados').add(rest);
+    }
+    for (const chip of backup.chips) {
+      const { id, ...rest } = chip;
+      await db.collection('chips').add(rest);
+    }
+    for (const asig of backup.asignaciones) {
+      const { id, ...rest } = asig;
+      await db.collection('asignaciones').add(rest);
+    }
     showToast('Importación deshecha. Datos restaurados.');
     btn.style.display = 'none';
     window._importBackup = null;
     loadEmpleados();
+    loadDashboard();
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
   }

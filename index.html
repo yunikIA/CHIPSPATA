@@ -101,6 +101,7 @@
         <div class="subtitle">Gestión de empleados y personal</div>
       </div>
       <div class="header-actions">
+        <button class="btn btn-danger" id="btn-delete-selected" style="display:none">🗑️ Eliminar seleccionados (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary" id="btn-nuevo-empleado">+ Nuevo Empleado</button>
       </div>
     </div>
@@ -116,6 +117,7 @@
           <table>
             <thead>
               <tr>
+                <th><input type="checkbox" id="select-all-empleados"></th>
                 <th>Nombre</th>
                 <th>Teléfono</th>
                 <th>Email</th>
@@ -127,7 +129,7 @@
               </tr>
             </thead>
             <tbody id="empleados-tbody">
-              <tr><td colspan="8" class="loading">Cargando...</td></tr>
+              <tr><td colspan="9" class="loading">Cargando...</td></tr>
             </tbody>
           </table>
         </div>

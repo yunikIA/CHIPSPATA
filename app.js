@@ -369,7 +369,7 @@ async function loadDashboard() {
 
 async function loadEmpleados() {
   const tbody = document.getElementById('empleados-tbody');
-  tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="loading">Cargando...</td></tr>';
   try {
     const search = document.getElementById('search-empleados').value.trim();
     const sector = document.getElementById('filter-sector').value;
@@ -384,7 +384,7 @@ async function loadEmpleados() {
       asigMap[a.empleado_id].push({ id: d.id, ...a });
     });
     if (empleados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📋</div><p>No hay empleados registrados</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = empleados.map(e => {
@@ -399,6 +399,7 @@ async function loadEmpleados() {
         <td>${escapeHtml(e.telefono || '')}</td>
         <td>${escapeHtml(e.email || '')}</td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
+        <td>${escapeHtml(e.observaciones || '')}</td>
         <td>${chipsInfo !== '—' ? '<span class="badge badge-warning">' + escapeHtml(chipsInfo) + '</span>' : '—'}</td>
         <td>
           ${asigId ? '<input type="text" class="edit-obs-input" data-asig-id="' + asigId + '" value="' + escapeHtml(obs) + '" placeholder="Sin observación" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:13px;width:140px">' : '—'}
@@ -429,7 +430,7 @@ async function loadEmpleados() {
     document.getElementById('select-all-empleados').checked = false;
     updateDeleteSelectedBtn();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>Error: ${err.message}</p></div></td></tr>`;
     showToast('Error al cargar empleados', 'error');
   }
 }
@@ -446,9 +447,11 @@ async function deleteSelectedEmpleados() {
   if (checked.length === 0) return;
   if (!confirm(`¿Eliminar ${checked.length} empleado(s) seleccionado(s)?`)) return;
   try {
-    for (const cb of checked) {
-      await db.collection('empleados').doc(cb.dataset.id).delete();
-    }
+    const batch = db.batch();
+    checked.forEach(cb => {
+      batch.delete(db.collection('empleados').doc(cb.dataset.id));
+    });
+    await batch.commit();
     showToast(`${checked.length} empleado(s) eliminado(s)`);
     loadEmpleados();
   } catch (err) {

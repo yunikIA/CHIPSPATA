@@ -1183,6 +1183,9 @@ async function loadAsignacionHistorial() {
         <td>${cpInfo}</td>
         <td>${actaBtn}</td>
         <td>${escapeHtml(a.observaciones || '—')}</td>
+        <td>
+          ${!a.fecha_devolucion ? `<button class="btn btn-sm btn-warning devolver-btn" data-asig="${a.id}" data-chip="${a.chip_id}">↩ Devolver</button>` : ''}
+        </td>
       </tr>`;
     }).join('');
   } catch (err) {

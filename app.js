@@ -420,6 +420,7 @@ async function loadEmpleados() {
         <td>${tieneAsig ? '<input type="text" class="edit-obs-input" data-asig-id="' + a.id + '" value="' + escapeHtml(a.observaciones || '') + '" placeholder="—" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:120px">' : '—'}</td>
         <td>
           <div class="table-actions">
+            ${tieneAsig && !a.fecha_devolucion ? '<button class="btn btn-sm btn-warning devolver-empleado-btn" data-asig="' + a.id + '" data-chip="' + a.chip_id + '">↩ Devolver</button>' : ''}
             ${tieneAsig ? '<button class="btn-icon edit-asig-btn" data-id="' + a.id + '" title="Editar asignación">✏️</button>' : ''}
             <button class="btn-icon" onclick="editEmpleado('${e.id}')" title="Editar empleado">👤</button>
             <button class="btn-icon" onclick="deleteEmpleado('${e.id}')" title="Eliminar">🗑️</button>
@@ -444,6 +445,12 @@ async function loadEmpleados() {
     tbody.querySelectorAll('.edit-asig-btn').forEach(btn => {
       btn.addEventListener('click', function() {
         editarAsignacionEmpleado(this.dataset.id);
+      });
+    });
+
+    tbody.querySelectorAll('.devolver-empleado-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        devolverChipDesdeEmpleado(this.dataset.asig, this.dataset.chip);
       });
     });
 
@@ -505,6 +512,18 @@ async function guardarEdicionAsignacion() {
   }
   btn.disabled = false;
   btn.textContent = 'Guardar';
+}
+
+async function devolverChipDesdeEmpleado(asigId, chipId) {
+  if (!confirm('¿Confirmás la devolución de este chip?')) return;
+  try {
+    await db.collection('asignaciones').doc(asigId).update({
+      fecha_devolucion: new Date().toISOString().split('T')[0]
+    });
+    await db.collection('chips').doc(chipId).update({ estado: 'disponible' });
+    showToast('Chip devuelto correctamente');
+    loadEmpleados();
+  } catch (err) { showToast('Error: ' + err.message, 'error'); }
 }
 
 function updateDeleteSelectedBtn() {

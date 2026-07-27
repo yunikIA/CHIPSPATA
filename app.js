@@ -401,8 +401,14 @@ async function loadEmpleados() {
     }
     tbody.innerHTML = filtered.map(e => {
       const asignaciones = asigMap[e.id] || [];
+      const chipsHtml = asignaciones.length > 0
+        ? asignaciones.map(a =>
+          `<span class="badge badge-warning" style="margin:1px">${escapeHtml(a.chip_numero || '')}</span>`
+        ).join(' ')
+        : '—';
       const a = asignaciones[0] || {};
       const tieneAsig = !!a.id;
+      const tieneActiva = asignaciones.some(x => !x.fecha_devolucion);
       const actaBtn = a.acta_url
         ? `<button class="btn btn-sm btn-outline ver-acta-btn" data-url="${escapeHtml(a.acta_url)}">📄 Ver</button>`
         : '—';
@@ -411,16 +417,18 @@ async function loadEmpleados() {
         <td><input type="checkbox" class="empleado-checkbox" data-id="${e.id}"></td>
         <td><strong>${escapeHtml(e.nombre)}</strong></td>
         <td><span class="badge badge-info">${escapeHtml(e.sector || 'Sin sector')}</span></td>
-        <td>${tieneAsig ? '<span class="badge badge-warning">' + escapeHtml(a.chip_numero || '') + '</span>' : '—'}</td>
+        <td>${chipsHtml}</td>
         <td>${tieneAsig ? '<span style="font-size:12px">' + formatDate(a.fecha_asignacion) + '</span>' : '—'}</td>
-        <td>${tieneAsig ? (a.fecha_devolucion ? '<span style="font-size:12px">' + formatDate(a.fecha_devolucion) + '</span>' : '<span class="badge badge-warning">Activo</span>') : '—'}</td>
+        <td>${tieneActiva ? '<span class="badge badge-warning">Activo</span>' : (a.fecha_devolucion ? '<span style="font-size:12px">' + formatDate(a.fecha_devolucion) + '</span>' : '—')}</td>
         <td>${tieneAsig ? (a.celular_asignado ? '✅' + (a.modelo_celular ? ' ' + escapeHtml(a.modelo_celular) : '') : '❌') : '—'}</td>
         <td>${tieneAsig ? (a.control_parental ? '<span class="badge badge-info">🔒 ' + escapeHtml(a.cp_email || '') + '</span>' : '❌') : '—'}</td>
         <td>${actaBtn}</td>
         <td>${tieneAsig ? '<input type="text" class="edit-obs-input" data-asig-id="' + a.id + '" value="' + escapeHtml(a.observaciones || '') + '" placeholder="—" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:120px">' : '—'}</td>
         <td>
           <div class="table-actions">
-            ${tieneAsig && !a.fecha_devolucion ? '<button class="btn btn-sm btn-warning devolver-empleado-btn" data-asig="' + a.id + '" data-chip="' + a.chip_id + '">↩ Devolver</button>' : ''}
+            ${tieneActiva ? asignaciones.filter(x => !x.fecha_devolucion).map(x =>
+              '<button class="btn btn-sm btn-warning devolver-empleado-btn" data-asig="' + x.id + '" data-chip="' + x.chip_id + '">↩ Devolver</button>'
+            ).join(' ') : ''}
             ${tieneAsig ? '<button class="btn-icon edit-asig-btn" data-id="' + a.id + '" title="Editar asignación">✏️</button>' : ''}
             <button class="btn-icon" onclick="editEmpleado('${e.id}')" title="Editar empleado">👤</button>
             <button class="btn-icon" onclick="deleteEmpleado('${e.id}')" title="Eliminar">🗑️</button>
